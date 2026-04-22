@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 99%;
+    --foreground: 220 30% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 12%;
+
+    --primary: 220 65% 18%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 220 20% 96%;
+    --secondary-foreground: 220 30% 12%;
+
+    --muted: 220 15% 95%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 220 50% 94%;
+    --accent-foreground: 220 65% 18%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 15% 91%;
+    --input: 220 15% 91%;
+    --ring: 220 65% 18%;
+
+    --radius: 0.5rem;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 8%;
+    --info: 220 65% 50%;
+    --info-foreground: 0 0% 98%;
+
+    --sidebar-background: 220 30% 12%;
+    --sidebar-foreground: 220 15% 80%;
+    --sidebar-primary: 220 65% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 25% 18%;
+    --sidebar-accent-foreground: 220 15% 90%;
+    --sidebar-border: 220 20% 20%;
+    --sidebar-ring: 220 65% 55%;
+  }
+
+  .dark {
+    --background: 220 30% 10%;
+    --foreground: 0 0% 98%;
+
+    --card: 220 30% 10%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 220 30% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 220 65% 70%;
+    --primary-foreground: 0 0% 10%;
+
+    --secondary: 220 20% 16%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 10% 70%;
+
+    --accent: 220 50% 20%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 25% 20%;
+    --input: 220 25% 20%;
+    --ring: 220 65% 70%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 8%;
+    --info: 220 65% 55%;
+    --info-foreground: 0 0% 98%;
+
+    --sidebar-background: 220 30% 10%;
+    --sidebar-foreground: 220 15% 80%;
+    --sidebar-primary: 220 65% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 25% 70%;
+    --sidebar-accent-foreground: 220 15% 10%;
+    --sidebar-border: 220 20% 25%;
+    --sidebar-ring: 220 65% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .status-resolved { @apply bg-[hsl(var(--success)/.1)] text-[hsl(var(--success))]; }
+  .status-pending { @apply bg-[hsl(var(--warning)/.1)] text-[hsl(var(--warning))]; }
+  .status-escalated { @apply bg-[hsl(var(--destructive)/.1)] text-[hsl(var(--destructive))]; }
+  .status-active { @apply bg-[hsl(var(--info)/.1)] text-[hsl(var(--info))]; }
+
+  .chat-audio-player {
+    border-radius: 9999px;
+  }
+
+  .chat-audio-player-own {
+    color-scheme: dark;
+    filter: brightness(0.94) saturate(0.9);
+  }
+
+  .chat-audio-player-own::-webkit-media-controls-enclosure {
+    border-radius: 9999px;
+  }
+
+  .chat-audio-player-own::-webkit-media-controls-panel {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .call-liquid-sphere {
+    border-radius: 60% 40% 32% 68% / 62% 34% 66% 38%;
+  }
+
+  .call-liquid-sphere-active {
+    animation: call-orb-morph 3.2s ease-in-out infinite, call-orb-float 4.8s ease-in-out infinite;
+  }
+
+  @keyframes call-orb-morph {
+    0%, 100% {
+      border-radius: 60% 40% 32% 68% / 62% 34% 66% 38%;
+    }
+
+    25% {
+      border-radius: 34% 66% 70% 30% / 44% 58% 42% 56%;
+    }
+
+    50% {
+      border-radius: 54% 46% 42% 58% / 36% 64% 40% 60%;
+    }
+
+    75% {
+      border-radius: 44% 56% 62% 38% / 58% 42% 60% 40%;
+    }
+  }
+
+  @keyframes call-orb-float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-12px);
+    }
+  }
+}
