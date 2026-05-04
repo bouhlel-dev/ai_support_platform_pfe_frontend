@@ -21,6 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { auditApi } from '@/shared/api/audit';
 import { normalizeError } from '@/shared/api/client';
@@ -74,6 +75,7 @@ function getActionCounts(logs: AuditLogEntry[]) {
 }
 
 export function AuditLogsPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [actionFilter, setActionFilter] = useState<'all' | AuditLogAction>('all');
   const [resourceFilter, setResourceFilter] = useState<string>('all');
@@ -152,14 +154,14 @@ export function AuditLogsPage() {
     onSuccess: async (result) => {
       await logsQ.refetch();
       toast({
-        title: 'Audit logs cleared',
+        title: t('auditLogs.logsCleared'),
         description: result.message,
       });
     },
     onError: (error) => {
       toast({
         variant: 'destructive',
-        title: 'Clear failed',
+        title: t('auditLogs.clearFailed'),
         description: normalizeError(error),
       });
     },
@@ -181,11 +183,11 @@ export function AuditLogsPage() {
       link.click();
       URL.revokeObjectURL(url);
 
-      toast({ title: 'Export complete', description: 'Audit CSV downloaded.' });
+      toast({ title: t('auditLogs.exportComplete'), description: t('auditLogs.auditCsvDownloaded') });
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: 'Export failed',
+        title: t('auditLogs.exportFailed'),
         description: normalizeError(error),
       });
     } finally {
@@ -209,7 +211,7 @@ export function AuditLogsPage() {
     if (confirmation.trim() !== CLEAR_AUDIT_CONFIRMATION) {
       toast({
         variant: 'destructive',
-        title: 'Confirmation mismatch',
+        title: t('auditLogs.confirmationMismatch'),
         description: `You must type ${CLEAR_AUDIT_CONFIRMATION} exactly.`,
       });
       return;
@@ -255,9 +257,9 @@ export function AuditLogsPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Logs & Audit</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('auditLogs.title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review critical admin events across users, tickets, and communication channels.
+            {t('auditLogs.subtitle')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { auditApi } from '@/shared/api/audit';
 import { normalizeError } from '@/shared/api/client';
@@ -105,6 +106,7 @@ function getStatusHistory(logs: AuditLogEntry[]) {
 }
 
 function UserDirectoryPage({ role }: { role: DirectoryRole }) {
+  const { t } = useTranslation();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -148,7 +150,7 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
     onError: (error) => {
       toast({
         variant: 'destructive',
-        title: 'Could not update user status',
+        title: t('usersManagement.updateStatusFailed'),
         description: normalizeError(error),
       });
     },
@@ -163,7 +165,7 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
     onError: (error) => {
       toast({
         variant: 'destructive',
-        title: 'Could not delete user',
+        title: t('usersManagement.deleteUserFailed'),
         description: normalizeError(error),
       });
     },
@@ -260,7 +262,7 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name or email"
+              placeholder={t('usersManagement.searchUsers')}
               className="pl-8"
             />
           </div>
@@ -291,10 +293,10 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
         ) : usersQ.isLoading ? (
           <div className="flex items-center justify-center py-14 text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading users...
+            {t('usersManagement.loadingUsers')}
           </div>
         ) : users.length === 0 ? (
-          <EmptyState title="No users" description={DIRECTORY_COPY[role].emptyLabel} />
+          <EmptyState title={t('usersManagement.noUsers')} description={DIRECTORY_COPY[role].emptyLabel} />
         ) : (
           <Table>
             <TableHeader>

@@ -72,4 +72,16 @@ export const voiceAgentsApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  // Admin: escalate a live or recorded call to a human agent (room_name required)
+  escalate: (payload: { room_name: string; reason: string; transcript?: string; audio_file_path?: string }) =>
+    apiClient<{
+      room_name: string;
+      ticket_id: string;
+      ticket_subject: string;
+      status: string;
+      escalation_flag: boolean;
+    }>('/voice-agents/escalate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

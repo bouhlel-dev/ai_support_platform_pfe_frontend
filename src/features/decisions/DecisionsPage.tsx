@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { Brain, Loader2, SlidersHorizontal, Sparkles, ShieldAlert, Gauge, GitBranch } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import type { DecisionResult } from '@/shared/types';
@@ -32,6 +33,7 @@ function humanize(value: string | null | undefined) {
 export function DecisionsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const [ticketId, setTicketId] = useState('');
   const [historyTicketId, setHistoryTicketId] = useState('');
@@ -64,7 +66,7 @@ export function DecisionsPage() {
     onSuccess: (next) => {
       setResult(next);
       toast({
-        title: 'Ticket analysis complete',
+        title: t('decisions.ticketAnalysisComplete'),
         description: `Outcome ${humanize(next.outcome)} with ${(next.confidence * 100).toFixed(0)}% confidence.`,
       });
     },
@@ -75,7 +77,7 @@ export function DecisionsPage() {
     mutationFn: () => decisionsApi.analyzeText(freeText.trim(), freeSubject.trim() || undefined),
     onSuccess: (next) => {
       setResult(next);
-      toast({ title: 'Preview analysis complete' });
+      toast({ title: t('decisions.previewAnalysisComplete') });
     },
     onError: (err) => toast({ variant: 'destructive', description: normalizeError(err) }),
   });
@@ -99,9 +101,9 @@ export function DecisionsPage() {
       <div className="rounded-2xl border bg-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Decision Engine</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('common.decisions')}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Analyze tickets, inspect rule outcomes, and keep triage behavior consistent.
+              {t('decisions.subtitle')}
             </p>
           </div>
 
@@ -109,7 +111,7 @@ export function DecisionsPage() {
             <Button asChild variant="outline" className="gap-2">
               <Link to="/decisions/config">
                 <SlidersHorizontal className="h-4 w-4" />
-                Configure rules
+                {t('common.decisionConfig')}
               </Link>
             </Button>
           ) : null}
@@ -117,19 +119,19 @@ export function DecisionsPage() {
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total decisions</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t('dashboardCharts.totalDecisions')}</p>
             <p className="text-xl font-semibold mt-1">{stats?.total_decisions ?? '-'}</p>
           </div>
           <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Auto resolved</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t('dashboardCharts.autoResolved')}</p>
             <p className="text-xl font-semibold mt-1">{stats?.auto_resolved ?? '-'}</p>
           </div>
           <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Escalated</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t('dashboardCharts.teamEscalated')}</p>
             <p className="text-xl font-semibold mt-1">{stats?.escalated ?? '-'}</p>
           </div>
           <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Escalation rate</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t('dashboardCharts.escalationRate')}</p>
             <p className="text-xl font-semibold mt-1">
               {stats?.escalation_rate !== undefined ? `${(stats.escalation_rate * 100).toFixed(0)}%` : '-'}
             </p>
@@ -152,15 +154,15 @@ export function DecisionsPage() {
                 <Gauge className="h-4 w-4 text-primary" />
                 <h3 className="text-sm font-semibold">Analyze by ticket</h3>
               </div>
-              <Input placeholder="Ticket ID" value={ticketId} onChange={(e) => setTicketId(e.target.value)} />
+              <Input placeholder={t('decisions.ticketIdPlaceholder')} value={ticketId} onChange={(e) => setTicketId(e.target.value)} />
 
               <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="auto-assign" className="text-xs">Auto-assign suggested agent</Label>
+                  <Label htmlFor="auto-assign" className="text-xs">{t('decisions.autoAssignAgent')}</Label>
                   <Switch id="auto-assign" checked={autoAssign} onCheckedChange={setAutoAssign} />
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="auto-update-priority" className="text-xs">Auto-update ticket priority</Label>
+                  <Label htmlFor="auto-update-priority" className="text-xs">{t('decisions.autoUpdatePriority')}</Label>
                   <Switch id="auto-update-priority" checked={autoUpdatePriority} onCheckedChange={setAutoUpdatePriority} />
                 </div>
               </div>
@@ -175,7 +177,7 @@ export function DecisionsPage() {
                 ) : (
                   <Brain className="h-4 w-4 mr-1" />
                 )}
-                Analyze ticket
+                {t('decisions.analyzeTicket')}
               </Button>
             </div>
 
@@ -185,12 +187,12 @@ export function DecisionsPage() {
                 <h3 className="text-sm font-semibold">Analyze free text</h3>
               </div>
               <Input
-                placeholder="Optional subject"
+                placeholder={t('decisions.subjectPlaceholder')}
                 value={freeSubject}
                 onChange={(e) => setFreeSubject(e.target.value)}
               />
               <Textarea
-                placeholder="Describe the issue..."
+                placeholder={t('decisions.issueDescription')}
                 value={freeText}
                 onChange={(e) => setFreeText(e.target.value)}
                 rows={4}
@@ -201,14 +203,14 @@ export function DecisionsPage() {
                 ) : (
                   <Brain className="h-4 w-4 mr-1" />
                 )}
-                Analyze preview
+                {t('decisions.analyzePreview')}
               </Button>
             </div>
           </div>
 
           {result && (
             <div className="rounded-xl border bg-card p-4 space-y-4">
-              <h3 className="text-sm font-semibold">Decision result</h3>
+              <h3 className="text-sm font-semibold">{t('decisions.decisionResult')}</h3>
 
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={result.outcome} />
@@ -278,7 +280,7 @@ export function DecisionsPage() {
             <div className="border-b bg-muted/20 p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
-                  placeholder="Optional ticket ID filter"
+                  placeholder={t('decisions.ticketIdFilter')}
                   value={historyTicketId}
                   onChange={(e) => setHistoryTicketId(e.target.value)}
                 />
@@ -288,7 +290,7 @@ export function DecisionsPage() {
                   onClick={() => setHistoryTicketId('')}
                   disabled={!historyTicketIdTrimmed}
                 >
-                  Clear filter
+                  {t('conversations.clearFilter')}
                 </Button>
               </div>
             </div>
@@ -299,8 +301,8 @@ export function DecisionsPage() {
               <ErrorState message={normalizeError(histError)} onRetry={() => histRefetch()} />
             ) : !history?.length ? (
               <EmptyState
-                title="No decisions yet"
-                description={historyTicketIdTrimmed ? 'No decisions matched this ticket filter.' : 'No decision logs found.'}
+                title={t('decisions.noDecisions')}
+                description={historyTicketIdTrimmed ? t('decisions.noDecisionsMatched') : t('decisions.noDecisionLogs')}
               />
             ) : (
               <table className="w-full text-sm">

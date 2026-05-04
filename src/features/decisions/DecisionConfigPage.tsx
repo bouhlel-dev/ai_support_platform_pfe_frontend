@@ -16,6 +16,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, RotateCcw, Save, ShieldAlert, SlidersHorizontal } from 'lucide-react';
 
 const DEFAULT_CONFIG: DecisionEngineConfig = {
@@ -110,6 +111,7 @@ function humanize(value: string | null | undefined) {
 }
 
 export function DecisionConfigPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [draft, setDraft] = useState<DecisionEngineConfig | null>(null);
@@ -137,10 +139,10 @@ export function DecisionConfigPage() {
       queryClient.invalidateQueries({ queryKey: ['decision-engine-config'] });
       queryClient.invalidateQueries({ queryKey: ['decision-outcomes-docs'] });
       queryClient.invalidateQueries({ queryKey: ['decision-stats'] });
-      toast({ title: 'Decision engine configuration saved' });
+      toast({ title: t('decisions.configurationSaved') });
     },
     onError: (err) => {
-      toast({ variant: 'destructive', title: 'Failed to save config', description: normalizeError(err) });
+      toast({ variant: 'destructive', title: t('decisions.saveConfigFailed'), description: normalizeError(err) });
     },
   });
 
@@ -168,16 +170,16 @@ export function DecisionConfigPage() {
       <div className="rounded-2xl border bg-card p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Decision Rule Configuration</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('common.decisionConfig')}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Fine-tune confidence, risk, and escalation behavior used by the decision engine.
+              {t('decisions.configSubtitle')}
             </p>
           </div>
 
           <Button asChild variant="outline" className="gap-2">
             <Link to="/decisions">
               <ArrowLeft className="h-4 w-4" />
-              Back to Decisions
+              {t('decisions.backToDecisions')}
             </Link>
           </Button>
         </div>
@@ -196,7 +198,7 @@ export function DecisionConfigPage() {
       ) : configQuery.error ? (
         <ErrorState message={normalizeError(configQuery.error)} onRetry={() => configQuery.refetch()} />
       ) : !draft ? (
-        <EmptyState title="No configuration available" description="Decision engine config could not be loaded." />
+          <EmptyState title={t('decisions.noConfiguration')} description={t('decisions.configNotLoaded')} />
       ) : (
         <div className="rounded-xl border bg-card p-4 space-y-4">
           <h2 className="text-sm font-semibold">Threshold tuning</h2>
@@ -287,11 +289,11 @@ export function DecisionConfigPage() {
             </Button>
 
             <Button variant="outline" onClick={() => setDraft(configQuery.data ?? null)} disabled={saveMutation.isPending}>
-              Revert unsaved changes
+              {t('decisions.revertUnsavedChanges')}
             </Button>
 
             <Button variant="ghost" onClick={() => setDraft(DEFAULT_CONFIG)} disabled={saveMutation.isPending}>
-              Reset to defaults
+              {t('decisions.resetToDefaults')}
             </Button>
           </div>
         </div>

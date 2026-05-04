@@ -4,6 +4,7 @@ import { ArrowLeft, Clock3, ExternalLink, Phone, QrCode, RefreshCw } from 'lucid
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getClientConfigRaw } from '@/shared/config/clientConfig';
+import { useTranslation } from 'react-i18next';
 
 const QR_EXPIRES_AFTER_SECONDS = 60;
 const QR_WAIT_RETRY_SECONDS = 3;
@@ -52,6 +53,7 @@ function buildQrPngUrl(qrUrl: string, version: number): string {
 }
 
 export function QrBridgePage() {
+  const { t } = useTranslation();
   const qrUrl = getClientConfigRaw('VITE_QR_BRIDGE_URL') || 'http://localhost:3000/qr';
   const [mode, setMode] = useState<ConnectMode>('qr');
   const [qrVersion, setQrVersion] = useState(0);
@@ -121,13 +123,13 @@ export function QrBridgePage() {
     <div className="p-6 max-w-6xl mx-auto space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">QR Bridge</h1>
-          <p className="text-sm text-muted-foreground">Pair your WhatsApp bridge session from this admin screen.</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('qrBridge.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('qrBridge.subtitle')}</p>
         </div>
         <Button asChild variant="outline" className="gap-2">
           <a href={qrUrl} target="_blank" rel="noreferrer">
             <ExternalLink className="h-4 w-4" />
-            Open Bridge URL
+            {t('qrBridge.openBridgeUrl')}
           </a>
         </Button>
       </div>
@@ -147,22 +149,22 @@ export function QrBridgePage() {
         {mode === 'qr' && (
           <div className="grid gap-8 p-6 md:grid-cols-[1.15fr_0.85fr] md:p-8">
             <div className="space-y-6">
-              <h2 className="text-3xl font-medium leading-tight">Connectez-vous sur WhatsApp</h2>
+              <h2 className="text-3xl font-medium leading-tight">{t('qrBridge.connectOnWhatsapp')}</h2>
               <div className="space-y-4">
                 <div className="flex gap-3">
                   <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-500 text-xs font-semibold">1</span>
-                  <p className="text-sm text-slate-300">Scan the QR with your phone camera from WhatsApp linked devices.</p>
+                  <p className="text-sm text-slate-300">{t('qrBridge.stepScanQr')}</p>
                 </div>
                 <div className="flex gap-3">
                   <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-500 text-xs font-semibold">2</span>
-                  <p className="text-sm text-slate-300">Open WhatsApp and tap <span className="font-semibold text-slate-100">Linked Devices</span>.</p>
+                  <p className="text-sm text-slate-300">{t('qrBridge.stepOpenLinkedDevices')}</p>
                 </div>
                 <div className="flex gap-3">
                   <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-500 text-xs font-semibold">3</span>
-                  <p className="text-sm text-slate-300">Scan again if the code expires while pairing.</p>
+                  <p className="text-sm text-slate-300">{t('qrBridge.stepRescanIfExpired')}</p>
                 </div>
               </div>
-              <p className="text-sm text-emerald-400">Need help? Keep this tab open while you scan.</p>
+              <p className="text-sm text-emerald-400">{t('qrBridge.helpHint')}</p>
             </div>
 
             <div className="space-y-3">
@@ -170,7 +172,7 @@ export function QrBridgePage() {
                 <img
                   key={qrVersion}
                   src={qrImageUrl}
-                  alt="WhatsApp pairing QR"
+                  alt={t('qrBridge.qrAlt')}
                   className="h-[320px] w-full rounded-lg object-contain"
                   onLoad={() => setQrImageUnavailable(false)}
                   onError={() => setQrImageUnavailable(true)}
@@ -183,7 +185,7 @@ export function QrBridgePage() {
                     </p>
                     <Button onClick={refreshQr} className="mt-3 gap-2">
                       <RefreshCw className="h-4 w-4" />
-                      Click to refresh
+                      {t('qrBridge.clickToRefresh')}
                     </Button>
                   </div>
                 )}
@@ -196,12 +198,12 @@ export function QrBridgePage() {
 
               <Button variant="secondary" className="w-full gap-2" onClick={() => setMode('phone')}>
                 <Phone className="h-4 w-4" />
-                Se connecter avec un numero de telephone
+                {t('qrBridge.connectWithPhoneNumber')}
               </Button>
 
               <Button variant="outline" className="w-full gap-2 border-slate-600 bg-transparent text-slate-200 hover:bg-slate-800" onClick={refreshQr}>
                 <RefreshCw className="h-4 w-4" />
-                Refresh now
+                {t('qrBridge.refreshNow')}
               </Button>
             </div>
           </div>
@@ -209,8 +211,8 @@ export function QrBridgePage() {
 
         {mode === 'phone' && (
           <div className="mx-auto w-full max-w-xl space-y-6 p-8 pt-14 text-center">
-            <h2 className="text-2xl font-medium">Saisissez un numero de telephone</h2>
-            <p className="text-sm text-slate-300">Use phone pairing when scanning a QR is not practical on this device.</p>
+            <h2 className="text-2xl font-medium">{t('qrBridge.enterPhoneNumber')}</h2>
+            <p className="text-sm text-slate-300">{t('qrBridge.phonePairingHint')}</p>
 
             <div className="space-y-3">
               <div className="rounded-full border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-slate-200">Tunisie (+216)</div>
@@ -233,10 +235,10 @@ export function QrBridgePage() {
 
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Button onClick={goToCodeMode} disabled={!canProceedToCode} className="min-w-28">
-                Suivant
+                {t('qrBridge.next')}
               </Button>
               <Button variant="outline" className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-800" onClick={() => setMode('qr')}>
-                Se connecter avec un code QR
+                {t('qrBridge.connectWithQrCode')}
               </Button>
             </div>
           </div>
@@ -245,9 +247,9 @@ export function QrBridgePage() {
         {mode === 'code' && (
           <div className="mx-auto w-full max-w-2xl space-y-6 p-8 pt-14">
             <div className="text-center">
-              <h2 className="text-2xl font-medium">Saisissez le code sur le telephone</h2>
+              <h2 className="text-2xl font-medium">{t('qrBridge.enterCodeOnPhone')}</h2>
               <button type="button" className="mt-1 text-sm text-emerald-400 hover:underline" onClick={() => setMode('phone')}>
-                modifier
+                {t('qrBridge.edit')}
               </button>
             </div>
 
@@ -273,11 +275,11 @@ export function QrBridgePage() {
 
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Button variant="outline" className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-800" onClick={() => setPairingCode(generatePairingCode())}>
-                Nouveau code
+                {t('qrBridge.newCode')}
               </Button>
               <Button onClick={() => setMode('qr')}>
                 <QrCode className="mr-2 h-4 w-4" />
-                Retour au QR
+                {t('qrBridge.backToQr')}
               </Button>
             </div>
           </div>

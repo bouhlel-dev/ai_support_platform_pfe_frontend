@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeError } from '@/shared/api/client';
@@ -47,6 +48,24 @@ function formatStatus(status: TicketStatus | 'all') {
 
 function formatAgentLabel(agent: ManagedUser) {
   return `${agent.full_name} (${agent.email})`;
+}
+
+function AgentSelectItem({ agent }: { agent: ManagedUser }) {
+  const initials = agent.full_name
+    .split(' ')
+    .slice(0, 2)
+    .map(n => n[0]?.toUpperCase())
+    .join('');
+
+  return (
+    <div className="flex items-center gap-2">
+      <Avatar className="h-5 w-5">
+        {agent.profile_picture_url && <AvatarImage src={agent.profile_picture_url} alt={agent.full_name} />}
+        <AvatarFallback className="text-[10px] font-semibold">{initials}</AvatarFallback>
+      </Avatar>
+      <span>{formatAgentLabel(agent)}</span>
+    </div>
+  );
 }
 
 function isTicketWithinDateRange(ticket: Ticket, dateFrom: string, dateTo: string) {
@@ -404,6 +423,135 @@ function ClientTicketsPage() {
   );
 }
 
+// --- Assign Agent Dialog ---
+function AssignAgentDialog({
+  open,
+  onOpenChange,
+  ticket,
+  agents,
+  onAssign,
+  isBusy,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  ticket: Ticket | null;
+  agents: ManagedUser[];
+  onAssign: (agentId: string) => void;
+  isBusy: boolean;
+}) {
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [search, setSearch] = useState('');
+
+  const filtered = agents.filter((a) =>
+    `${a.full_name} ${a.email}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleOpen = (open: boolean) => {
+    if (!open) {
+      setSelectedAgentId('');
+      setSearch('');
+    }
+    onOpenChange(open);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Assign Agent</DialogTitle>
+          <DialogDescription>
+            Select an agent to handle{' '}
+            <span className="font-medium text-foreground">{ticket?.subject}</span>.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search agents..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="max-h-64 overflow-y-auto rounded-lg border divide-y">
+            {filtered.length === 0 ? (
+              <p className="p-4 text-center text-sm text-muted-foreground">No agents found.</p>
+            ) : (
+              filtered.map((agent) => {
+                const initials = agent.full_name
+                  .split(' ')
+                  .slice(0, 2)
+                  .map((n) => n[0]?.toUpperCase())
+                  .join('');
+                const isSelected = selectedAgentId === agent.id;
+                const isCurrent = ticket?.assigned_agent_id === agent.id;
+
+                return (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    onClick={() => setSelectedAgentId(agent.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 ${
+                      isSelected ? 'bg-primary/10' : ''
+                    }`}
+                  >
+                    <Avatar className="h-8 w-8 shrink-0">
+                      {agent.profile_picture_url && (
+                        <AvatarImage src={agent.profile_picture_url} alt={agent.full_name} />
+                      )}
+                      <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{agent.full_name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{agent.email}</p>
+                    </div>
+                    {isCurrent && (
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        Current
+                      </span>
+                    )}
+                    {isSelected && !isCurrent && (
+                      <span className="shrink-0 h-2 w-2 rounded-full bg-primary" />
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleOpen(false)} disabled={isBusy}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              if (selectedAgentId) onAssign(selectedAgentId);
+            }}
+            disabled={
+              !selectedAgentId ||
+              selectedAgentId === ticket?.assigned_agent_id ||
+              isBusy
+            }
+          >
+            {isBusy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Assigning...
+              </>
+            ) : (
+              'Assign'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -413,10 +561,10 @@ function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
   const [search, setSearch] = useState(() => searchParams.get('search')?.trim() ?? '');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, string>>({});
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [assignBusyId, setAssignBusyId] = useState<string | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+  const [assignDialogTicket, setAssignDialogTicket] = useState<Ticket | null>(null);
 
   const ticketsQ = useQuery({
     queryKey: ['tickets-command-center', { page, size: 20, status: statusTab }],
@@ -508,6 +656,7 @@ function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
         queryClient.invalidateQueries({ queryKey: ['tickets'] }),
         queryClient.invalidateQueries({ queryKey: ['ticket', updatedTicket.id] }),
       ]);
+      setAssignDialogTicket(null);
       toast({ title: 'Ticket assigned' });
     },
     onError: (error) => {
@@ -607,12 +756,9 @@ function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
     updateStatusMut.mutate({ ticketId, status, resolutionNote });
   };
 
-  const handleAssign = (ticket: Ticket) => {
-    const nextAgentId = assignmentDrafts[ticket.id] ?? ticket.assigned_agent_id ?? '';
-    if (!nextAgentId || nextAgentId === ticket.assigned_agent_id) {
-      return;
-    }
-    assignMut.mutate({ ticketId: ticket.id, agentId: nextAgentId });
+  const handleAssign = (agentId: string) => {
+    if (!assignDialogTicket) return;
+    assignMut.mutate({ ticketId: assignDialogTicket.id, agentId });
   };
 
   const handleDelete = (ticket: Ticket) => {
@@ -751,7 +897,9 @@ function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
                     <th className="p-3 text-left font-medium text-muted-foreground">Status</th>
                     <th className="p-3 text-left font-medium text-muted-foreground">Assigned</th>
                     <th className="p-3 text-left font-medium text-muted-foreground">Updated</th>
-                    <th className="p-3 text-left font-medium text-muted-foreground">Actions</th>
+                    {role === 'admin' && (
+                      <th className="p-3 text-left font-medium text-muted-foreground">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -759,7 +907,6 @@ function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
                     const assignedAgent = ticket.assigned_agent_id
                       ? agentLookup.get(ticket.assigned_agent_id)
                       : undefined;
-                    const assignmentValue = assignmentDrafts[ticket.id] ?? ticket.assigned_agent_id ?? '';
                     const preview = buildMailLikeDisplay(ticket.description).preview || ticket.description;
 
                     return (
@@ -808,7 +955,7 @@ function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
                           ) : null}
                         </td>
 
-                        <td className="p-2.5 min-w-[220px]">
+                        <td className="p-2.5 min-w-[180px]">
                           <p className="text-sm font-medium">
                             {assignedAgent?.full_name ?? (ticket.assigned_agent_id ? ticket.assigned_agent_id : 'Unassigned')}
                           </p>
@@ -819,78 +966,41 @@ function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
                           {new Date(ticket.updated_at).toLocaleString()}
                         </td>
 
-                        <td className="p-2.5 min-w-[250px]">
-                          {role === 'admin' ? (
-                            <div className="space-y-2">
-                              <div className="inline-flex w-full items-center gap-2">
-                                <Select
-                                  value={assignmentValue}
-                                  onValueChange={(value) =>
-                                    setAssignmentDrafts((current) => ({
-                                      ...current,
-                                      [ticket.id]: value,
-                                    }))
-                                  }
-                                  disabled={assignBusyId === ticket.id || deleteBusyId === ticket.id || agentsQ.isLoading}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select agent" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {(agentsQ.data?.users ?? []).map((agent) => (
-                                      <SelectItem key={agent.id} value={agent.id}>
-                                        {formatAgentLabel(agent)}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 rounded-full"
-                                  disabled={
-                                    assignBusyId === ticket.id ||
-                                    deleteBusyId === ticket.id ||
-                                    !assignmentValue ||
-                                    assignmentValue === ticket.assigned_agent_id
-                                  }
-                                  onClick={() => handleAssign(ticket)}
-                                >
-                                  <UserCog className="mr-1 h-3.5 w-3.5" />
-                                  Assign
-                                </Button>
-
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  className="h-8 rounded-full"
-                                  disabled={deleteBusyId === ticket.id || assignBusyId === ticket.id}
-                                  onClick={() => handleDelete(ticket)}
-                                >
-                                  <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                  Delete
-                                </Button>
-                              </div>
-
-                              {assignBusyId === ticket.id ? (
-                                <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        {role === 'admin' && (
+                          <td className="p-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8 rounded-full"
+                                title="Assign agent"
+                                disabled={assignBusyId === ticket.id || deleteBusyId === ticket.id}
+                                onClick={() => setAssignDialogTicket(ticket)}
+                              >
+                                {assignBusyId === ticket.id ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  Assigning...
-                                </p>
-                              ) : null}
+                                ) : (
+                                  <UserCog className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
 
-                              {deleteBusyId === ticket.id ? (
-                                <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Button
+                                size="icon"
+                                variant="destructive"
+                                className="h-8 w-8 rounded-full"
+                                title="Delete ticket"
+                                disabled={deleteBusyId === ticket.id || assignBusyId === ticket.id}
+                                onClick={() => handleDelete(ticket)}
+                              >
+                                {deleteBusyId === ticket.id ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  Deleting...
-                                </p>
-                              ) : null}
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
                             </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">Assignment is managed by admin role.</p>
-                          )}
-                        </td>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -922,6 +1032,17 @@ function OperatorTicketsCommandCenter({ role }: { role: OperatorRole }) {
           </>
         )}
       </div>
+
+      <AssignAgentDialog
+        open={assignDialogTicket !== null}
+        onOpenChange={(open) => {
+          if (!open) setAssignDialogTicket(null);
+        }}
+        ticket={assignDialogTicket}
+        agents={agentsQ.data?.users ?? []}
+        onAssign={handleAssign}
+        isBusy={assignBusyId === assignDialogTicket?.id}
+      />
     </div>
   );
 }

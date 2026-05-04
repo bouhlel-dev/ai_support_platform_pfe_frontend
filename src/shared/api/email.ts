@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type {
+  EmailDeliveryStatus,
   EmailAssistedDraftResponse,
   EmailBulkAction,
   EmailBulkActionResponse,
@@ -17,6 +18,7 @@ import type {
 } from '@/shared/types';
 
 export const emailApi = {
+  deliveryStatus: () => apiClient<EmailDeliveryStatus>('/emails/delivery-status'),
   list: (params?: {
     folder?: EmailMailboxFolder;
     status?: string;

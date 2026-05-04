@@ -10,6 +10,7 @@ import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
 import { AppLayout } from '@/shared/components/AppLayout';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
+import { LandingPage } from '@/features/landing/landingPage';
 import { Loader2 } from 'lucide-react';
 
 const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -26,6 +27,7 @@ const VisualAiPage = lazy(() => import('@/features/visual-ai/VisualAiPage').then
 const QrBridgePage = lazy(() => import('@/features/admin/QrBridgePage').then(m => ({ default: m.QrBridgePage })));
 const SettingsPage = lazy(() => import('@/features/admin/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const VoiceAgentsPage = lazy(() => import('@/features/admin/VoiceAgentsPage').then(m => ({ default: m.VoiceAgentsPage })));
+const AiDraftSnippetsPage = lazy(() => import('@/features/admin/AiDraftSnippetsPage').then(m => ({ default: m.AiDraftSnippetsPage })));
 const AdminsPage = lazy(() => import('@/features/admin/UsersManagementPage').then(m => ({ default: m.AdminsPage })));
 const AgentsPage = lazy(() => import('@/features/admin/UsersManagementPage').then(m => ({ default: m.AgentsPage })));
 const ClientsPage = lazy(() => import('@/features/admin/UsersManagementPage').then(m => ({ default: m.ClientsPage })));
@@ -69,6 +71,7 @@ const App = () => (
         <AuthProvider>
           <Suspense fallback={<Loading />}>
             <Routes>
+              <Route path="/landing" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/support-call" element={<ProtectedRoute><ClientCallPage /></ProtectedRoute>} />
@@ -90,6 +93,7 @@ const App = () => (
                 <Route path="/voice-calls" element={<ProtectedRoute roles={['agent', 'admin']}><VoiceCallsPage /></ProtectedRoute>} />
                 <Route path="/qr" element={<ProtectedRoute roles={['admin']}><QrBridgePage /></ProtectedRoute>} />
                 <Route path="/voice-agents" element={<ProtectedRoute roles={['admin']}><VoiceAgentsPage /></ProtectedRoute>} />
+                <Route path="/ai-draft-snippets" element={<ProtectedRoute roles={['admin']}><AiDraftSnippetsPage /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />

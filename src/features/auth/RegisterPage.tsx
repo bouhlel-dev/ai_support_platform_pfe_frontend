@@ -9,7 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { normalizeError } from '@/shared/api/client';
 import { settingsApi } from '@/shared/api/settings';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2, ChevronLeft } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { isRtlLanguage } from '@/shared/i18n/DirectionSync';
+import { CursorParticleField } from '@/shared/components/CursorParticleField';
 
 export function RegisterPage() {
   const [name, setName] = useState('');
@@ -19,6 +22,8 @@ export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t, i18n } = useTranslation();
+  const isRtl = isRtlLanguage(i18n.resolvedLanguage || i18n.language);
 
   const publicSettingsQ = useQuery({
     queryKey: ['public-auth-settings'],
@@ -29,7 +34,7 @@ export function RegisterPage() {
   const minPasswordLength = publicSettingsQ.data?.min_password_length ?? 8;
   const requirePasswordComplexity = publicSettingsQ.data?.password_complexity ?? false;
   const appName = publicSettingsQ.data?.app_name || 'AI Support Agent';
-  const appDescription = publicSettingsQ.data?.description || 'Get started with your support dashboard';
+  const appDescription = publicSettingsQ.data?.description || t('auth.registerDescription');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,8 +42,8 @@ export function RegisterPage() {
     if (!allowRegistration) {
       toast({
         variant: 'destructive',
-        title: 'Registration disabled',
-        description: 'Account registration is currently disabled by admin settings.',
+        title: t('auth.registrationDisabled'),
+        description: t('auth.registrationDisabledDesc'),
       });
       return;
     }
@@ -46,8 +51,8 @@ export function RegisterPage() {
     if (password.length < minPasswordLength) {
       toast({
         variant: 'destructive',
-        title: 'Password too short',
-        description: `Password must be at least ${minPasswordLength} characters long.`,
+        title: t('auth.passwordTooShort'),
+        description: t('auth.passwordTooShortDesc', { min: minPasswordLength }),
       });
       return;
     }
@@ -57,8 +62,8 @@ export function RegisterPage() {
       if (!complexityRegex.test(password)) {
         toast({
           variant: 'destructive',
-          title: 'Weak password',
-          description: 'Use upper/lower letters, a number, and a symbol.',
+          title: t('auth.weakPassword'),
+          description: t('auth.weakPasswordDesc'),
         });
         return;
       }
@@ -69,39 +74,45 @@ export function RegisterPage() {
       await register(email, password, name);
       navigate('/');
     } catch (err) {
-      toast({ variant: 'destructive', title: 'Registration failed', description: normalizeError(err) });
+      toast({ variant: 'destructive', title: t('auth.registrationFailed'), description: normalizeError(err) });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-md shadow-lg border-0">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-muted/30 p-4">
+      <CursorParticleField />
+      <Link
+        to="/landing"
+        aria-label={t('common.backToLanding')}
+        className={`absolute top-4 z-10 rounded-md p-2 text-foreground transition-colors shadow-sm hover:bg-muted/60 dark:hover:bg-muted/50 ${isRtl ? 'right-4' : 'left-4'}`}
+      >
+        <ChevronLeft className={`h-5 w-5 ${isRtl ? 'rotate-180' : ''}`} />
+      </Link>
+      <Card className="relative z-10 w-full max-w-md border-0 shadow-lg">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <ShieldCheck className="h-6 w-6 text-primary-foreground" />
-          </div>
-          <CardTitle className="text-2xl font-semibold">Create account for {appName}</CardTitle>
+          <img src="/logo-l2t.png" alt="L2T" className="mx-auto mb-3 h-10 w-auto" />
+          <CardTitle className="text-2xl font-semibold">{t('auth.registerTitle', { appName })}</CardTitle>
           <CardDescription>{appDescription}</CardDescription>
         </CardHeader>
         <CardContent>
           {!allowRegistration ? (
             <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-              Registration is disabled by administrator settings.
+              {t('auth.registrationDisabledDesc')}
             </div>
           ) : null}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name">{t('common.fullName')}</Label>
               <Input id="name" value={name} onChange={e => setName(e.target.value)} required placeholder="John Doe" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('common.email')}</Label>
               <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@company.com" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('common.password')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -112,15 +123,15 @@ export function RegisterPage() {
                 placeholder="••••••••"
               />
               <p className="text-xs text-muted-foreground">
-                Minimum {minPasswordLength} characters{requirePasswordComplexity ? ', include upper/lowercase, number, and symbol.' : '.'}
+                {t('auth.minimumChars', { min: minPasswordLength })}{requirePasswordComplexity ? `, ${t('auth.includeComplexity')}` : '.'}
               </p>
             </div>
             <Button type="submit" className="w-full" disabled={loading || !allowRegistration}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create account
+              {loading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}{t('common.createAccount')}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Already have an account? <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link>
+            {t('auth.haveAccount')} <Link to="/login" className="text-primary font-medium hover:underline">{t('common.signIn')}</Link>
           </p>
         </CardContent>
       </Card>

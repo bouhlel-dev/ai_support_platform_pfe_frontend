@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, MutableRefObject, ReactNode } from 'react';
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -36,59 +36,86 @@ import { visualAiApi } from '@/shared/api/visual-ai';
 import { voiceAgentsApi } from '@/shared/api/voiceAgents';
 import { cn } from '@/lib/utils';
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 type OrbVisualState = 'standby' | 'listening' | 'speaking' | 'muted' | 'thinking';
-type AssistantState = 'connecting' | 'disconnected' | 'initializing' | 'listening' | 'thinking' | 'speaking' | string;
+type AssistantState =
+  | 'connecting'
+  | 'disconnected'
+  | 'initializing'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | string;
 type ScreenCaptureMode = 'chunk' | 'frame';
-type ScreenAnalysisEntry = {
+
+interface ScreenAnalysisEntry {
   id: string;
   frameNumber: number;
   captureMode: ScreenCaptureMode;
   text: string;
   recordedAt: string;
-};
+}
+
 type VideoFrameAwareElement = HTMLVideoElement & {
   requestVideoFrameCallback?: (callback: () => void) => number;
   cancelVideoFrameCallback?: (handle: number) => void;
 };
-type ImageCaptureLike = {
+
+interface ImageCaptureLike {
   grabFrame: () => Promise<ImageBitmap>;
-};
+}
+
 type ImageCaptureConstructor = new (track: MediaStreamTrack) => ImageCaptureLike;
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const SPEECH_ACTIVITY_THRESHOLD = 0.08;
 const TRACK_VOLUME_OPTIONS = { fftSize: 32, smoothingTimeConstant: 0.35 } as const;
+
 const SCREEN_CAPTURE_TARGET_FPS = 2;
 const SCREEN_CAPTURE_MAX_FPS = 5;
 const SCREEN_CAPTURE_CHUNK_DURATION_MS = 2_500;
 const SCREEN_CAPTURE_LOOP_DELAY_MS = 250;
+const SCREEN_CAPTURE_MIN_CYCLE_MS = 3_000; // minimum ms between iteration starts
 const SCREEN_CAPTURE_TIMESLICE_MS = 700;
 const SCREEN_CAPTURE_CHUNK_HARD_TIMEOUT_MS = 8_000;
 const SCREEN_CAPTURE_CHUNK_RACE_TIMEOUT_MS = 4_500;
 const SCREEN_NO_LIVE_TRACK_MAX_CYCLES = 10;
 const SCREEN_CAPTURE_PREFER_FRAME_FALLBACK = true;
-const SCREEN_ANALYSIS_REQUEST_TIMEOUT_MS = 35_000;
+const SCREEN_ANALYSIS_MAX_HISTORY = 24;
+
 const SCREEN_FRAME_CAPTURE_PLAY_TIMEOUT_MS = 750;
 const SCREEN_FRAME_CAPTURE_READY_TIMEOUT_MS = 1_200;
 const SCREEN_FRAME_CAPTURE_TO_BLOB_TIMEOUT_MS = 1_200;
 const SCREEN_FRAME_CAPTURE_STABILIZE_DELAY_MS = 120;
+
 const SCREEN_RECORDING_MIME_CANDIDATES = [
   'video/webm;codecs=vp9,opus',
   'video/webm;codecs=vp8,opus',
   'video/webm;codecs=h264,opus',
   'video/webm',
-];
+] as const;
+
+const SCREEN_SHARE_ERROR_MESSAGES = {
+  NO_TRACK: 'No screen track is available. Please start sharing again.',
+  STREAM_ENDED: 'Screen sharing ended. Click Share screen to resume live analysis.',
+  WAITING: 'Waiting for the screen stream...',
+  NOT_SUPPORTED: 'Screen sharing is not supported in this browser.',
+} as const;
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function ClientCallPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
   const screenshareUseGeminiEmbeddings = getClientConfigBoolean(
     'VITE_DEFAULT_SCREENSHARE_USE_GEMINI_EMBEDDINGS',
     true,
   );
-  const screenAnalysisEngineLabel = getScreenAnalysisEngineLabel({
-    useGeminiEmbeddings: screenshareUseGeminiEmbeddings,
-  });
+  const screenAnalysisEngineLabel = getScreenAnalysisEngineLabel(screenshareUseGeminiEmbeddings);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [screenPreviewStream, setScreenPreviewStream] = useState<MediaStream | null>(null);
   const [screenAnalysisText, setScreenAnalysisText] = useState<string | null>(null);
@@ -101,10 +128,13 @@ export function ClientCallPage() {
   const [screenCaptureMode, setScreenCaptureMode] = useState<ScreenCaptureMode>(
     SCREEN_CAPTURE_PREFER_FRAME_FALLBACK ? 'frame' : 'chunk',
   );
+  // Refs for screen capture loop management
   const screenChunkRecorderRef = useRef<MediaRecorder | null>(null);
-  const screenChunkStopTimeoutRef = useRef<number | null>(null);
-  const screenLoopTimeoutRef = useRef<number | null>(null);
+  const screenChunkStopTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const screenLoopTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const screenLoopActiveRef = useRef(false);
+  const screenIterationInFlightRef = useRef(false);
+  const screenIterationStartedAtRef = useRef<number>(0);
   const screenPreviewStreamRef = useRef<MediaStream | null>(null);
   const screenSessionIdRef = useRef<string | null>(null);
   const screenChunkIndexRef = useRef(0);
@@ -122,7 +152,9 @@ export function ClientCallPage() {
   const displayName = user?.name?.trim() || 'Client';
   const initials = getInitials(displayName);
   const supportCallRoomName = user?.id ? `support-call-${user.id}` : undefined;
-  const handleLeave = () => navigate('/conversations');
+  const handleLeave = useCallback(() => navigate('/conversations'), [navigate]);
+
+  // ─── Screen Analysis Helpers ─────────────────────────────────────────────
 
   const recordScreenAnalysis = useCallback(
     ({
@@ -130,27 +162,25 @@ export function ClientCallPage() {
       captureMode,
       text,
       recordedAt,
-    }: {
-      frameNumber: number;
-      captureMode: ScreenCaptureMode;
-      text: string;
-      recordedAt: string;
-    }) => {
+      id,
+    }: ScreenAnalysisEntry) => {
       const trimmed = text.trim();
       if (!trimmed) {
         return;
       }
 
-      setScreenAnalysisHistory((previous) => [
-        {
-          id: `${captureMode}-${frameNumber}-${recordedAt}`,
-          frameNumber,
-          captureMode,
-          text: trimmed,
-          recordedAt,
-        },
-        ...previous,
-      ].slice(0, 24));
+      setScreenAnalysisHistory((previous) =>
+        [
+          {
+            id,
+            frameNumber,
+            captureMode,
+            text: trimmed,
+            recordedAt,
+          },
+          ...previous,
+        ].slice(0, SCREEN_ANALYSIS_MAX_HISTORY),
+      );
     },
     [],
   );
@@ -169,6 +199,8 @@ export function ClientCallPage() {
     }
   }, []);
 
+  // ─── Screen Capture: Chunk ────────────────────────────────────────────────
+
   const captureScreenChunk = useCallback(
     (stream: MediaStream) =>
       new Promise<{ blob: Blob | null; mimeType: string }>((resolve, reject) => {
@@ -179,7 +211,7 @@ export function ClientCallPage() {
 
         const chunks: Blob[] = [];
         let finished = false;
-        let hardTimeoutId: number | null = null;
+        let hardTimeoutId: ReturnType<typeof window.setTimeout> | null = null;
 
         const clearHardTimeout = () => {
           if (hardTimeoutId !== null) {
@@ -189,9 +221,7 @@ export function ClientCallPage() {
         };
 
         const finish = (payload: { blob: Blob | null; mimeType: string }) => {
-          if (finished) {
-            return;
-          }
+          if (finished) return;
           finished = true;
           clearHardTimeout();
           clearScreenChunkStopTimeout();
@@ -202,9 +232,7 @@ export function ClientCallPage() {
         };
 
         const fail = (error: unknown) => {
-          if (finished) {
-            return;
-          }
+          if (finished) return;
           finished = true;
           clearHardTimeout();
           clearScreenChunkStopTimeout();
@@ -225,13 +253,11 @@ export function ClientCallPage() {
             finalizeFromBufferedChunks();
             return;
           }
-
           try {
             recorder.requestData();
           } catch {
             // requestData may not be supported in all runtimes.
           }
-
           try {
             recorder.stop();
           } catch {
@@ -240,34 +266,24 @@ export function ClientCallPage() {
         };
 
         recorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            chunks.push(event.data);
-          }
+          if (event.data.size > 0) chunks.push(event.data);
         };
-
-        recorder.onerror = (event) => {
-          fail(event.error ?? new Error('Screen recorder failed.'));
-        };
-
-        recorder.onstop = () => {
-          finalizeFromBufferedChunks();
-        };
+        recorder.onerror = (event) => fail((event as unknown as { error?: DOMException }).error ?? new Error('Screen recorder failed.'));
+        recorder.onstop = finalizeFromBufferedChunks;
 
         try {
           screenChunkRecorderRef.current = recorder;
           recorder.start(SCREEN_CAPTURE_TIMESLICE_MS);
-          screenChunkStopTimeoutRef.current = window.setTimeout(() => {
-            stopRecorderSafely();
-          }, SCREEN_CAPTURE_CHUNK_DURATION_MS);
-
+          screenChunkStopTimeoutRef.current = window.setTimeout(
+            stopRecorderSafely,
+            SCREEN_CAPTURE_CHUNK_DURATION_MS,
+          ) as unknown as ReturnType<typeof window.setTimeout>;
           hardTimeoutId = window.setTimeout(() => {
             stopRecorderSafely();
             window.setTimeout(() => {
-              if (!finished) {
-                fail(new Error('Screen capture timed out. Retrying with frame fallback.'));
-              }
+              if (!finished) fail(new Error('Screen capture timed out. Retrying with frame fallback.'));
             }, 120);
-          }, SCREEN_CAPTURE_CHUNK_HARD_TIMEOUT_MS);
+          }, SCREEN_CAPTURE_CHUNK_HARD_TIMEOUT_MS) as unknown as ReturnType<typeof window.setTimeout>;
         } catch (error) {
           fail(error);
         }
@@ -295,11 +311,11 @@ export function ClientCallPage() {
     [captureScreenChunk],
   );
 
+  // ─── Screen Capture: Frame ────────────────────────────────────────────────
+
   const captureScreenFrame = useCallback(async (stream: MediaStream): Promise<File | null> => {
     const directTrackFrame = await captureFrameFromTrack(stream.getVideoTracks()[0]);
-    if (directTrackFrame) {
-      return directTrackFrame;
-    }
+    if (directTrackFrame) return directTrackFrame;
 
     const video = document.createElement('video');
     video.srcObject = stream;
@@ -311,19 +327,17 @@ export function ClientCallPage() {
       const playAttempt = video.play();
       if (playAttempt && typeof playAttempt.then === 'function') {
         await Promise.race([
-          playAttempt.catch(() => {
-            // Best effort only.
-          }),
+          playAttempt.catch(() => undefined),
           waitForDuration(SCREEN_FRAME_CAPTURE_PLAY_TIMEOUT_MS),
         ]);
       }
 
-      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+      if (
+        video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+        !video.videoWidth ||
+        !video.videoHeight
+      ) {
         await new Promise<void>((resolve) => {
-          const onReady = () => {
-            cleanup();
-            resolve();
-          };
           const timer = window.setTimeout(() => {
             cleanup();
             resolve();
@@ -333,7 +347,10 @@ export function ClientCallPage() {
             video.removeEventListener('loadeddata', onReady);
             video.removeEventListener('loadedmetadata', onReady);
           };
-
+          const onReady = () => {
+            cleanup();
+            resolve();
+          };
           video.addEventListener('loadeddata', onReady, { once: true });
           video.addEventListener('loadedmetadata', onReady, { once: true });
         });
@@ -341,14 +358,12 @@ export function ClientCallPage() {
 
       await waitForVideoPaint(video);
 
-      const renderedFrame = await renderCanvasImageToFile({
+      const rendered = await renderCanvasImageToFile({
         imageSource: video,
         width: video.videoWidth || 1280,
         height: video.videoHeight || 720,
       });
-      if (renderedFrame) {
-        return renderedFrame;
-      }
+      if (rendered) return rendered;
 
       await waitForDuration(SCREEN_FRAME_CAPTURE_STABILIZE_DELAY_MS);
       await waitForVideoPaint(video);
@@ -364,6 +379,8 @@ export function ClientCallPage() {
     }
   }, []);
 
+  // ─── Screen Sharing Loop ──────────────────────────────────────────────────
+
   const stopScreenSharingLoop = useCallback(
     (
       streamOverride?: MediaStream | null,
@@ -372,6 +389,8 @@ export function ClientCallPage() {
       },
     ) => {
       screenLoopActiveRef.current = false;
+      screenIterationInFlightRef.current = false;
+      screenIterationStartedAtRef.current = 0;
       clearScreenLoopTimeout();
       clearScreenChunkStopTimeout();
       screenNoLiveTrackCyclesRef.current = 0;
@@ -405,12 +424,85 @@ export function ClientCallPage() {
     [clearScreenChunkStopTimeout, clearScreenLoopTimeout],
   );
 
+  // ─── Error Handler (Frame Fallback) ────────────────────────────────────────
+
+  const handleCaptureError = useCallback(
+    async (options: {
+      error: unknown;
+      stream: MediaStream;
+      chunkIndex: number;
+      sessionId: string;
+      screenshareUseGeminiEmbeddings: boolean;
+      supportCallRoomName: string;
+      captureScreenFrame: (stream: MediaStream) => Promise<Blob | null>;
+      setIsAnalyzingScreen: (value: boolean) => void;
+      setScreenAnalysisText: (value: string | null) => void;
+      setScreenShareError: (value: string | null) => void;
+      setLastScreenAnalysisAt: (value: string | null) => void;
+      setScreenCaptureMode: (mode: 'chunk' | 'frame') => void;
+      recordScreenAnalysis: (entry: ScreenAnalysisEntry) => void;
+      screenUseFrameFallbackRef: MutableRefObject<boolean>;
+      screenLoopActiveRef: MutableRefObject<boolean>;
+    }) => {
+      const fallbackFrame = await options.captureScreenFrame(options.stream);
+      if (!fallbackFrame) {
+        options.setScreenShareError(normalizeError(options.error));
+        return;
+      }
+
+      try {
+        options.screenUseFrameFallbackRef.current = true;
+        options.setScreenCaptureMode('frame');
+        options.setIsAnalyzingScreen(true);
+        options.setScreenAnalysisText(`Uploading frame fallback for chunk #${options.chunkIndex}...`);
+
+        const fallbackOptions: Record<string, unknown> = {
+          consent: true,
+          source_fps: SCREEN_CAPTURE_TARGET_FPS,
+          target_fps: SCREEN_CAPTURE_TARGET_FPS,
+          support_call_room_name: options.supportCallRoomName,
+          frame_number: options.chunkIndex,
+          chunk_index: options.chunkIndex,
+          ...(options.screenshareUseGeminiEmbeddings && { use_gemini_embeddings: true }),
+        };
+
+        const fallback = await visualAiApi.screenshareFrames(
+          [fallbackFrame as File],
+          fallbackOptions,
+        );
+        const caption = fallback.final_frame?.caption?.trim();
+        const ocrText = fallback.final_frame?.ocr_text_preview?.trim();
+        const firstHint = getPreferredScreenAnalysisHint(fallback.assistance_hints, caption);
+        const analysisText = buildAnalysisText(caption, ocrText, firstHint);
+        const recordedAt = new Date().toISOString();
+
+        if (analysisText) {
+          options.setScreenAnalysisText(analysisText);
+          options.setLastScreenAnalysisAt(recordedAt);
+          options.setScreenShareError(null);
+          options.recordScreenAnalysis({
+            id: `frame-${Date.now()}`,
+            frameNumber: options.chunkIndex,
+            captureMode: 'frame',
+            text: analysisText,
+            recordedAt,
+          });
+        } else {
+          options.setScreenShareError(null);
+        }
+      } catch (fallbackError) {
+        options.setScreenShareError(normalizeError(fallbackError));
+      }
+    },
+    [],
+  );
+
   const startScreenSharingLoop = useCallback(
-    (stream: MediaStream) => {
+    (stream: MediaStream, sessionIdParam: string) => {
       screenLoopActiveRef.current = true;
       clearScreenLoopTimeout();
       clearScreenChunkStopTimeout();
-      screenSessionIdRef.current = createScreenSessionId();
+      screenSessionIdRef.current = sessionIdParam;
       screenChunkIndexRef.current = 0;
       screenNoLiveTrackCyclesRef.current = 0;
       screenUseFrameFallbackRef.current = SCREEN_CAPTURE_PREFER_FRAME_FALLBACK;
@@ -426,17 +518,29 @@ export function ClientCallPage() {
         }
         screenLoopTimeoutRef.current = window.setTimeout(() => {
           void run();
-        }, SCREEN_CAPTURE_LOOP_DELAY_MS);
+        }, SCREEN_CAPTURE_LOOP_DELAY_MS) as unknown as ReturnType<typeof window.setTimeout>;
       };
 
       const runIteration = async () => {
         if (!screenLoopActiveRef.current) {
+        // Skip this tick if a previous request is still in flight
+        if (screenIterationInFlightRef.current) {
+          scheduleNext(runIteration);
+          return;
+        }
+        // Enforce minimum cycle time to avoid hammering the backend
+        const now = Date.now();
+        const elapsed = now - screenIterationStartedAtRef.current;
+        if (screenIterationStartedAtRef.current > 0 && elapsed < SCREEN_CAPTURE_MIN_CYCLE_MS) {
+          scheduleNext(runIteration);
+          return;
+        }
           return;
         }
 
         const videoTracks = stream.getVideoTracks();
         if (videoTracks.length === 0) {
-          setScreenShareError('No screen track is available. Please start sharing again.');
+          setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.NO_TRACK);
           stopScreenSharingLoop(stream, { reason: 'ended' });
           return;
         }
@@ -445,11 +549,11 @@ export function ClientCallPage() {
         if (!hasLiveTrack) {
           screenNoLiveTrackCyclesRef.current += 1;
           if (screenNoLiveTrackCyclesRef.current >= SCREEN_NO_LIVE_TRACK_MAX_CYCLES) {
-            setScreenShareError('Screen sharing ended. Click Share screen to resume live analysis.');
+            setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.STREAM_ENDED);
             stopScreenSharingLoop(stream, { reason: 'ended' });
             return;
           }
-          setScreenShareError('Waiting for the screen stream...');
+          setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.WAITING);
           scheduleNext(runIteration);
           return;
         }
@@ -461,6 +565,8 @@ export function ClientCallPage() {
           return;
         }
 
+        screenIterationInFlightRef.current = true;
+        screenIterationStartedAtRef.current = Date.now();
         screenChunkIndexRef.current += 1;
         const chunkIndex = screenChunkIndexRef.current;
         const captureUnit = screenUseFrameFallbackRef.current ? 'frame' : 'chunk';
@@ -487,86 +593,55 @@ export function ClientCallPage() {
           setScreenShareError(null);
           setScreenAnalysisText(`Uploading chunk #${chunkIndex} for analysis...`);
 
-          const chunkRequestOptions: Record<string, unknown> = {
+          const chunkOptions: Record<string, unknown> = {
             consent: true,
             session_id: sessionId,
             chunk_index: chunkIndex,
             target_fps: SCREEN_CAPTURE_TARGET_FPS,
             support_call_room_name: supportCallRoomName,
+            ...(screenshareUseGeminiEmbeddings && { use_gemini_embeddings: true }),
           };
-          if (screenshareUseGeminiEmbeddings) {
-            chunkRequestOptions.use_gemini_embeddings = true;
-          }
 
-          const result = await visualAiApi.screenshareRealtimeChunk(blob, chunkRequestOptions);
-
+          const result = await visualAiApi.screenshareRealtimeChunk(blob, chunkOptions);
           const caption = result.final_frame?.caption?.trim();
+          const ocrText = result.final_frame?.ocr_text_preview?.trim();
           const firstHint = getPreferredScreenAnalysisHint(result.assistance_hints, caption);
-          const summary = caption
-            ? `The user is doing: ${caption}`
-            : 'The user is interacting with the app interface.';
-          const analysisText = firstHint ? `${summary} ${firstHint}` : summary;
+          const analysisText = buildAnalysisText(caption, ocrText, firstHint);
           const recordedAt = new Date().toISOString();
 
-          setScreenAnalysisText(analysisText);
-          setLastScreenAnalysisAt(recordedAt);
-          recordScreenAnalysis({
-            frameNumber: chunkIndex,
-            captureMode: screenUseFrameFallbackRef.current ? 'frame' : 'chunk',
-            text: analysisText,
-            recordedAt,
-          });
-        } catch (error) {
-          if (!screenLoopActiveRef.current) {
-            return;
-          }
-
-          const fallbackFrame = await captureScreenFrame(stream);
-          if (!fallbackFrame) {
-            setScreenShareError(normalizeError(error));
-            return;
-          }
-
-          try {
-            screenUseFrameFallbackRef.current = true;
-            setScreenCaptureMode('frame');
-            setIsAnalyzingScreen(true);
-            setScreenAnalysisText(`Uploading frame fallback for chunk #${chunkIndex}...`);
-
-            const fallbackOptions: Record<string, unknown> = {
-              consent: true,
-              source_fps: SCREEN_CAPTURE_TARGET_FPS,
-              target_fps: SCREEN_CAPTURE_TARGET_FPS,
-              support_call_room_name: supportCallRoomName,
-              frame_number: chunkIndex,
-              chunk_index: chunkIndex,
-            };
-            if (screenshareUseGeminiEmbeddings) {
-              fallbackOptions.use_gemini_embeddings = true;
-            }
-
-            const fallback = await visualAiApi.screenshareFrames([fallbackFrame], fallbackOptions);
-            const caption = fallback.final_frame?.caption?.trim();
-            const firstHint = getPreferredScreenAnalysisHint(fallback.assistance_hints, caption);
-            const summary = caption
-              ? `The user is doing: ${caption}`
-              : 'The user is interacting with the app interface.';
-            const analysisText = firstHint ? `${summary} ${firstHint}` : summary;
-            const recordedAt = new Date().toISOString();
-
+          // Only update display and history when we have real content
+          if (analysisText) {
             setScreenAnalysisText(analysisText);
             setLastScreenAnalysisAt(recordedAt);
-            setScreenShareError(null);
             recordScreenAnalysis({
+              id: `chunk-${Date.now()}`,
               frameNumber: chunkIndex,
-              captureMode: 'frame',
+              captureMode: screenUseFrameFallbackRef.current ? 'frame' : 'chunk',
               text: analysisText,
               recordedAt,
             });
-          } catch (fallbackError) {
-            setScreenShareError(normalizeError(fallbackError));
           }
+        } catch (error) {
+          if (!screenLoopActiveRef.current) return;
+          await handleCaptureError({
+            error,
+            stream,
+            chunkIndex,
+            sessionId,
+            screenshareUseGeminiEmbeddings,
+            supportCallRoomName,
+            captureScreenFrame,
+            setIsAnalyzingScreen,
+            setScreenAnalysisText,
+            setScreenShareError,
+            setLastScreenAnalysisAt,
+            setScreenCaptureMode,
+            recordScreenAnalysis,
+            screenUseFrameFallbackRef,
+            screenLoopActiveRef,
+          });
         } finally {
+          screenIterationInFlightRef.current = false;
           if (screenLoopActiveRef.current) {
             setIsAnalyzingScreen(false);
             scheduleNext(runIteration);
@@ -589,6 +664,8 @@ export function ClientCallPage() {
     ],
   );
 
+  // ─── Share Screen Handler ─────────────────────────────────────────────────
+
   const handleShareScreen = useCallback(async () => {
     if (isScreenSharing) {
       stopScreenSharingLoop(undefined, { reason: 'manual' });
@@ -596,12 +673,12 @@ export function ClientCallPage() {
     }
 
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      setScreenShareError('Screen sharing is not supported in this browser.');
+      setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.NOT_SUPPORTED);
       return;
     }
 
     if (!SCREEN_CAPTURE_PREFER_FRAME_FALLBACK && typeof MediaRecorder === 'undefined') {
-      setScreenShareError('Screen sharing is not supported in this browser.');
+      setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.NOT_SUPPORTED);
       return;
     }
 
@@ -618,31 +695,35 @@ export function ClientCallPage() {
 
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        if ('contentHint' in videoTrack) {
-          try {
-            videoTrack.contentHint = 'detail';
-          } catch {
-            // Best effort only.
-          }
-        }
+        try {
+          (videoTrack as MediaStreamTrack & { contentHint?: string }).contentHint = 'detail';
+        } catch { /* best effort */ }
+
         videoTrack.onended = () => {
-          setScreenShareError('Screen sharing ended. Click Share screen to resume live analysis.');
+          setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.STREAM_ENDED);
           stopScreenSharingLoop(stream, { reason: 'ended' });
         };
+
         try {
           await videoTrack.applyConstraints({ frameRate: SCREEN_CAPTURE_TARGET_FPS });
-        } catch {
-          // Best effort: browser may ignore or reject stricter FPS constraints.
-        }
+        } catch { /* best effort */ }
       }
 
       screenPreviewStreamRef.current = stream;
       setScreenPreviewStream(stream);
+      screenLoopActiveRef.current = true;
+      screenNoLiveTrackCyclesRef.current = 0;
+      screenUseFrameFallbackRef.current = false;
+      setScreenCaptureMode(SCREEN_CAPTURE_PREFER_FRAME_FALLBACK ? 'frame' : 'chunk');
       setIsScreenSharing(true);
-      setScreenAnalysisText(null);
-      startScreenSharingLoop(stream);
+
+      const sessionId = createScreenSessionId();
+      void startScreenSharingLoop(stream, sessionId);
     } catch (error) {
-      setScreenShareError(normalizeError(error));
+      const msg = normalizeError(error);
+      if (!msg.includes('NotAllowedError') && !msg.includes('Permission')) {
+        setScreenShareError(msg);
+      }
       setIsScreenSharing(false);
       screenPreviewStreamRef.current = null;
       setScreenPreviewStream(null);
@@ -927,34 +1008,16 @@ function ClientCallShell({
   const orbInnerGlow = 14 + motionLevel * 34;
   const orbActive = orbState === 'listening' || orbState === 'speaking';
   const isMobileLayout = useIsMobile();
-  const [analysisSidebarOpen, setAnalysisSidebarOpen] = useState(true);
   const retainedScreenAnalysisText = getRetainedScreenAnalysisText(screenAnalysisText);
   const latestAnalysisEntry = screenAnalysisHistory[0] ?? null;
   const showScreenAnalysisPanel =
     isScreenSharing || Boolean(screenShareError) || screenAnalysisHistory.length > 0 || Boolean(retainedScreenAnalysisText);
-  const showLiveAnalysisBubble = false;
   const currentFrameNumber = Math.max(1, screenChunkNumber);
-  const currentCaptureLabel = `${capitalizeScreenCaptureMode(screenCaptureMode)} #${currentFrameNumber}`;
-  const liveAnalysisTitle = screenShareError ? 'Screen Analysis Issue' : 'Live Screen Analysis';
-  const liveAnalysisStatusLabel = screenShareError
-    ? 'Issue'
-    : isAnalyzingScreen
-      ? 'Running'
-      : isScreenSharing
-        ? 'Live'
-        : 'Ready';
-  const latestInsightMessage =
-    latestAnalysisEntry?.text || retainedScreenAnalysisText;
   const liveAnalysisMessage =
-    latestInsightMessage ||
+    latestAnalysisEntry?.text ||
+    retainedScreenAnalysisText ||
     screenShareError ||
-    `${analysisEngineLabel} will add readable frame summaries here as the shared screen updates.`;
-
-  useEffect(() => {
-    if (!showScreenAnalysisPanel) {
-      setAnalysisSidebarOpen(true);
-    }
-  }, [showScreenAnalysisPanel]);
+    (isAnalyzingScreen ? 'Analyzing screen...' : 'Waiting for first readable frame...');
 
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-col overflow-hidden">
@@ -982,18 +1045,6 @@ function ClientCallShell({
           <div className="rounded-full border border-border/70 bg-card/75 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
             {statusLabel}
           </div>
-          {showScreenAnalysisPanel && isScreenSharing && !isMobileLayout && !analysisSidebarOpen ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-full border border-border/70 bg-card/75 shadow-sm backdrop-blur hover:bg-card dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
-              onClick={() => setAnalysisSidebarOpen(true)}
-              aria-label="Expand sidebar"
-            >
-              <Sparkles className="h-4 w-4" />
-            </Button>
-          ) : null}
         </div>
       </header>
 
@@ -1030,196 +1081,41 @@ function ClientCallShell({
           </div>
         </div>
 
-        {showScreenAnalysisPanel && isMobileLayout ? (
-          <div className="pointer-events-none absolute inset-x-4 bottom-0 top-0 z-20 flex items-end justify-center pb-2 pt-2 lg:hidden">
-            <ClientCallScreenAnalysisPanel
-              analysisEngineLabel={analysisEngineLabel}
-              currentCaptureLabel={currentCaptureLabel}
-              currentFrameNumber={currentFrameNumber}
-              initials={initials}
-              isAnalyzingScreen={isAnalyzingScreen}
-              isScreenSharing={isScreenSharing}
-              lastScreenAnalysisAt={lastScreenAnalysisAt}
-              layout="overlay"
-              latestAnalysisEntry={latestAnalysisEntry}
-              latestAnalysisMessage={liveAnalysisMessage}
-              liveAnalysisStatusLabel={liveAnalysisStatusLabel}
-              liveAnalysisTitle={liveAnalysisTitle}
-              screenAnalysisHistory={screenAnalysisHistory}
-              screenPreviewStream={screenPreviewStream}
-              screenShareError={screenShareError}
-            />
-          </div>
-        ) : null}
+        {showScreenAnalysisPanel && isScreenSharing ? (
+          <div className="pointer-events-none absolute inset-x-0 inset-y-0 flex items-end justify-end p-4 sm:p-6">
+            <div className="pointer-events-auto flex w-80 flex-col gap-3">
+              {liveAnalysisMessage ? (
+                <div
+                  className={cn(
+                    'rounded-3xl border px-4 py-3 text-xs leading-relaxed shadow-lg backdrop-blur-sm',
+                    screenShareError
+                      ? 'border-rose-700 bg-rose-100 text-rose-900'
+                      : 'border-primary-600 bg-primary-100 text-primary-900 dark:border-primary-700 dark:bg-primary-950 dark:text-primary-100',
+                  )}
+                >
+                  <p className="font-medium">{screenShareError ? 'Analysis Issue' : 'Live Analysis'}</p>
+                  <p className="mt-1">{liveAnalysisMessage}</p>
+                </div>
+              ) : null}
 
-        {showScreenAnalysisPanel && !isMobileLayout ? (
-          <div
-            className={cn(
-              'hidden min-h-0 shrink-0 overflow-hidden transition-all duration-300 ease-in-out lg:flex lg:flex-col',
-              analysisSidebarOpen ? 'w-72 pl-2 opacity-100' : 'w-0 pl-0 opacity-0 pointer-events-none',
-            )}
-          >
-            <div
-              className={cn(
-                'flex min-h-0 flex-1 flex-col transition-all duration-300 ease-in-out',
-                analysisSidebarOpen
-                  ? 'translate-x-0 scale-100 opacity-100 visible'
-                  : 'translate-x-6 scale-95 opacity-0 invisible',
-              )}
-            >
-              <ClientCallScreenAnalysisPanel
-                analysisEngineLabel={analysisEngineLabel}
-                currentCaptureLabel={currentCaptureLabel}
-                currentFrameNumber={currentFrameNumber}
-                initials={initials}
-                isAnalyzingScreen={isAnalyzingScreen}
-                isScreenSharing={isScreenSharing}
-                lastScreenAnalysisAt={lastScreenAnalysisAt}
-                layout="sidebar"
-                latestAnalysisEntry={latestAnalysisEntry}
-                latestAnalysisMessage={liveAnalysisMessage}
-                liveAnalysisStatusLabel={liveAnalysisStatusLabel}
-                liveAnalysisTitle={liveAnalysisTitle}
-                onCloseSidebar={() => setAnalysisSidebarOpen(false)}
-                screenAnalysisHistory={screenAnalysisHistory}
+              <ScreenShareVideoPopup
                 screenPreviewStream={screenPreviewStream}
+                isScreenSharing={isScreenSharing}
+                isAnalyzingScreen={isAnalyzingScreen}
+                screenCaptureMode={screenCaptureMode}
+                screenChunkNumber={screenChunkNumber}
                 screenShareError={screenShareError}
-                showCloseButton
               />
+
+              {isScreenSharing && lastScreenAnalysisAt && (
+                <p className="text-center text-[10px] text-muted-foreground/70">
+                  {lastScreenAnalysisAt
+                    ? `Updated ${formatScreenAnalysisTimestamp(lastScreenAnalysisAt)}`
+                    : 'Awaiting first analysis'}
+                </p>
+              )}
             </div>
           </div>
-        ) : null}
-
-        <div className="hidden">
-          <div className="w-80">
-            <div className="relative h-44 w-80 overflow-hidden rounded-2xl border border-white/14 bg-[radial-gradient(circle_at_center,_rgba(30,64,83,0.24),_rgba(8,12,19,0.96)_72%)] shadow-[0_24px_70px_rgba(2,6,23,0.52)]">
-              {screenPreviewStream ? (
-                <video
-                  autoPlay
-                  muted
-                  playsInline
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <div className="flex h-24 w-24 items-center justify-center rounded-full bg-neutral-400 shadow-[0_16px_30px_rgba(2,6,23,0.45)]">
-                    <User className="h-11 w-11 text-white" />
-                    <span className="sr-only">{initials}</span>
-                  </div>
-                </div>
-              )}
-
-              {isScreenSharing ? (
-                <span className="absolute left-3 top-3 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white">
-                  Recording {SCREEN_CAPTURE_TARGET_FPS} FPS
-                </span>
-              ) : null}
-
-              {isAnalyzingScreen ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/45">
-                  <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/55 px-3 py-1.5 text-xs text-white">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Analyzing with {analysisEngineLabel}...
-                  </p>
-                </div>
-              ) : null}
-            </div>
-
-            {screenShareError ? (
-              <p className="mt-2 text-xs text-rose-300">{screenShareError}</p>
-            ) : null}
-
-            {screenAnalysisText ? (
-              <p className="mt-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs leading-5 text-slate-100">
-                {screenAnalysisText}
-              </p>
-            ) : null}
-
-            {isScreenSharing ? (
-              <p className="mt-1 text-[11px] text-slate-300/90">
-                Live analysis · {screenCaptureMode} #{Math.max(1, screenChunkNumber)}
-                {lastScreenAnalysisAt
-                  ? ` · updated ${formatScreenAnalysisTimestamp(lastScreenAnalysisAt)}`
-                  : ' · awaiting first result'}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        {showLiveAnalysisBubble ? (
-          <aside className="absolute right-8 top-1/2 hidden w-80 -translate-y-1/2 md:block">
-            <div
-              className={cn(
-                'rounded-2xl border px-4 py-3 shadow-[0_24px_70px_rgba(2,6,23,0.45)] backdrop-blur',
-                screenShareError
-                  ? 'border-rose-300/40 bg-rose-950/55 text-rose-50'
-                  : 'border-white/14 bg-slate-950/72 text-slate-100',
-              )}
-            >
-              <p
-                className={cn(
-                  'text-[11px] font-medium uppercase tracking-[0.16em]',
-                  screenShareError ? 'text-rose-100/90' : 'text-slate-300/90',
-                )}
-              >
-                {liveAnalysisTitle}
-              </p>
-              <p className="mt-2 text-sm leading-6">{liveAnalysisMessage}</p>
-              <p
-                className={cn(
-                  'mt-2 text-[11px]',
-                  screenShareError ? 'text-rose-100/85' : 'text-slate-300/85',
-                )}
-              >
-                {isScreenSharing
-                  ? `${capitalizeScreenCaptureMode(screenCaptureMode)} #${Math.max(1, screenChunkNumber)}`
-                  : screenShareError
-                    ? 'Capture stopped'
-                    : 'Capture paused'}
-                {lastScreenAnalysisAt
-                  ? ` · updated ${formatScreenAnalysisTimestamp(lastScreenAnalysisAt)}`
-                  : ''}
-              </p>
-            </div>
-          </aside>
-        ) : null}
-
-        {showLiveAnalysisBubble ? (
-          <aside className="pointer-events-none absolute inset-x-4 bottom-28 z-20 md:hidden">
-            <div
-              className={cn(
-                'rounded-2xl border px-4 py-3 shadow-[0_16px_42px_rgba(2,6,23,0.4)] backdrop-blur',
-                screenShareError
-                  ? 'border-rose-300/40 bg-rose-950/55 text-rose-50'
-                  : 'border-white/14 bg-slate-950/78 text-slate-100',
-              )}
-            >
-              <p
-                className={cn(
-                  'text-[11px] font-medium uppercase tracking-[0.16em]',
-                  screenShareError ? 'text-rose-100/90' : 'text-slate-300/90',
-                )}
-              >
-                {liveAnalysisTitle}
-              </p>
-              <p className="mt-2 text-sm leading-6">{liveAnalysisMessage}</p>
-              <p
-                className={cn(
-                  'mt-2 text-[11px]',
-                  screenShareError ? 'text-rose-100/85' : 'text-slate-300/85',
-                )}
-              >
-                {isScreenSharing
-                  ? `${capitalizeScreenCaptureMode(screenCaptureMode)} #${Math.max(1, screenChunkNumber)}`
-                  : screenShareError
-                    ? 'Capture stopped'
-                    : 'Capture paused'}
-                {lastScreenAnalysisAt
-                  ? ` · updated ${formatScreenAnalysisTimestamp(lastScreenAnalysisAt)}`
-                  : ''}
-              </p>
-            </div>
-          </aside>
         ) : null}
       </main>
 
@@ -1881,76 +1777,78 @@ function capitalizeScreenCaptureMode(mode: ScreenCaptureMode) {
 
 function getRetainedScreenAnalysisText(text: string | null | undefined) {
   const normalized = (text || '').trim();
-  if (!normalized) {
-    return '';
-  }
-
-  if (normalized.startsWith('Capturing screen ') || normalized.startsWith('Uploading ')) {
-    return '';
-  }
-
+  if (!normalized) return '';
+  if (normalized.startsWith('Capturing screen ') || normalized.startsWith('Uploading ')) return '';
   return normalized;
 }
 
 function captionSuggestsVisibleContent(caption: string | null | undefined) {
   const normalized = (caption || '').trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
+  if (!normalized) return false;
 
   const lowSignalMarkers = [
-    'black image',
-    'blank image',
-    'blank screen',
-    'nothing visible',
-    'no visible content',
-    'no discernible content',
-    'fully obscured',
-    'entirely obscured',
+    'black image', 'blank image', 'blank screen', 'nothing visible',
+    'no visible content', 'no discernible content', 'fully obscured', 'entirely obscured',
   ];
   return !lowSignalMarkers.some((marker) => normalized.includes(marker));
 }
 
-function getPreferredScreenAnalysisHint(hints: string[] | undefined, caption?: string | null) {
-  if (!Array.isArray(hints) || hints.length === 0) {
-    return '';
-  }
+// ─── CHANGED: strips noise and surfaces real OCR/caption content ──────────────
 
-  const lowSignalFrameWarning = hints.find((hint) => {
-    const normalized = (hint || '').trim().toLowerCase();
-    return normalized.startsWith('the shared frame looks blank') || normalized.startsWith('the shared frame looks unreadable');
-  });
+const HINT_NOISE_PREFIXES = [
+  'frames processed:',
+  'avg transition:',
+  'average ui transition',
+  'processed ',
+  'embedding analysis unavailable',
+  'gemini embeddings failed',
+  'reference similarity:',
+  'frame appears blank',
+  'the shared frame looks blank',
+  'the shared frame looks unreadable',
+  'significant ui change detected',
+];
 
-  const preferredHint = hints.find((hint) => {
-    const normalized = (hint || '').trim().toLowerCase();
-    return (
-      Boolean(normalized) &&
-      !normalized.startsWith('processed ') &&
-      !normalized.startsWith('average ui transition score:') &&
-      normalized !== (lowSignalFrameWarning || '').trim().toLowerCase()
-    );
-  });
+function getPreferredScreenAnalysisHint(hints: string[] | undefined, caption?: string | null): string {
+  if (!Array.isArray(hints) || hints.length === 0) return '';
 
-  if (preferredHint) {
-    return preferredHint.trim();
-  }
+  const isNoise = (h: string) => {
+    const n = h.trim().toLowerCase();
+    return HINT_NOISE_PREFIXES.some((p) => n.startsWith(p));
+  };
 
-  if (lowSignalFrameWarning && captionSuggestsVisibleContent(caption)) {
-    return '';
-  }
+  // 1. Raw OCR text — strip the "Visible text: " prefix
+  const visibleText = hints.find((h) => h.trim().toLowerCase().startsWith('visible text:'));
+  if (visibleText) return visibleText.replace(/^visible text:\s*/i, '').trim();
 
-  return (preferredHint || hints[0] || '').trim();
+  // 2. UI element labels — strip the "UI cues: " prefix
+  const uiCues = hints.find((h) => h.trim().toLowerCase().startsWith('ui cues:'));
+  if (uiCues) return uiCues.replace(/^ui cues:\s*/i, '').trim();
+
+  // 3. Any remaining non-noise hint
+  const meaningful = hints.find((h) => !isNoise(h));
+  if (meaningful) return meaningful.trim();
+
+  return '';
 }
 
-function getScreenAnalysisEngineLabel({
-  useGeminiEmbeddings,
-}: {
-  useGeminiEmbeddings?: boolean;
-}) {
-  if (useGeminiEmbeddings) {
-    return 'Gemini';
-  }
+// ─── CHANGED: returns null when there's no real content so empty frames
+// don't overwrite good history entries ────────────────────────────────────────
 
+function buildAnalysisText(
+  caption: string | undefined,
+  ocrText: string | undefined,
+  hint: string | undefined,
+): string | null {
+  // Priority: raw OCR text > UI hint (already stripped of prefix) > caption
+  if (ocrText) return ocrText;
+  if (hint) return hint;
+  if (caption) return caption;
+  // Return null so the caller knows there's nothing worth showing/recording
+  return null;
+}
+
+function getScreenAnalysisEngineLabel(useGeminiEmbeddings?: boolean): string {
   return 'Gemini';
 }
 
@@ -1958,44 +1856,23 @@ function createScreenSessionId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-
   return `screen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function formatScreenAnalysisTimestamp(value: string) {
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return 'just now';
-  }
-
-  return parsed.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  if (Number.isNaN(parsed.getTime())) return 'just now';
+  return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function stopStreamTracks(stream: MediaStream | null | undefined) {
-  if (!stream) {
-    return;
-  }
-
-  stream.getTracks().forEach((track) => {
-    track.stop();
-  });
+  if (!stream) return;
+  stream.getTracks().forEach((track) => { track.stop(); });
 }
 
 function getInitials(name: string) {
-  const parts = name
-    .split(/\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 2);
-
-  if (parts.length === 0) {
-    return 'CL';
-  }
-
+  const parts = name.split(/\s+/).map((part) => part.trim()).filter(Boolean).slice(0, 2);
+  if (parts.length === 0) return 'CL';
   return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
 }
 
@@ -2007,5 +1884,90 @@ function isConnectedState(connectionState: ConnectionState | string) {
     connectionState === 'connected' ||
     connectionState === 'reconnecting' ||
     connectionState === 'signalReconnecting'
+  );
+}
+
+function ScreenShareVideoPopup({
+  screenPreviewStream,
+  isScreenSharing,
+  isAnalyzingScreen,
+  screenCaptureMode,
+  screenChunkNumber,
+  screenShareError,
+}: {
+  screenPreviewStream: MediaStream | null;
+  isScreenSharing: boolean;
+  isAnalyzingScreen: boolean;
+  screenCaptureMode: ScreenCaptureMode;
+  screenChunkNumber: number;
+  screenShareError: string | null;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (screenPreviewStream) {
+      video.srcObject = screenPreviewStream;
+      video.play().catch(() => {});
+
+      const handleLoadedMetadata = () => {
+        setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
+      };
+
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      return () => {
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.srcObject = null;
+      };
+    } else {
+      video.srcObject = null;
+      setVideoDimensions(null);
+    }
+  }, [screenPreviewStream]);
+
+  const aspectRatio = videoDimensions
+    ? (videoDimensions.width / videoDimensions.height).toFixed(2)
+    : null;
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl border border-white/20 bg-slate-950 shadow-2xl"
+      style={aspectRatio ? { width: '320px', aspectRatio } : { width: '320px', height: '224px' }}
+    >
+      <video
+        ref={videoRef}
+        muted
+        playsInline
+        className="h-full w-full object-cover"
+        aria-label="Screen share preview"
+      />
+
+      <div className="absolute inset-0 pointer-events-none">
+        {isScreenSharing && (
+          <div className="absolute right-2 top-2 flex items-center gap-1.5 rounded-full border border-white/20 bg-black/60 px-2.5 py-1">
+            <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-[10px] font-medium text-white">
+              {screenCaptureMode} #{Math.max(1, screenChunkNumber)}
+            </span>
+          </div>
+        )}
+
+        {isAnalyzingScreen && (
+          <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5 rounded-full border border-white/20 bg-black/60 px-2.5 py-1">
+            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+            <span className="text-[10px] font-medium text-white">Analyzing...</span>
+          </div>
+        )}
+      </div>
+
+      {screenShareError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <p className="px-2 text-center text-xs text-rose-200">{screenShareError}</p>
+        </div>
+      )}
+    </div>
   );
 }

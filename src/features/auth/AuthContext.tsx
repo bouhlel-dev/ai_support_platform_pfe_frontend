@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '@/shared/types';
 import { authApi } from '@/shared/api/auth';
 import { getToken, clearToken, setToken, onAuthChanged, onSessionExpired } from '@/shared/api/client';
@@ -33,6 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const enableDemoAuth = getClientConfigBoolean('VITE_ENABLE_DEMO_AUTH', false);
   const { toast } = useToast();
   const sessionExpiredRef = useRef(false);
+  const queryClient = useQueryClient();
+  const prevUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -47,6 +50,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   }, [enableDemoAuth]);
+
+  // Invalidate cache when user changes (account switching)
+  useEffect(() => {
+    if (user?.id && prevUserIdRef.current && prevUserIdRef.current !== user.id) {
+      // User has changed (switched accounts), clear all cached data
+      void queryClient.invalidateQueries();
+    }
+    prevUserIdRef.current = user?.id ?? null;
+  }, [user?.id, queryClient]);
 
   useEffect(() => {
     return onAuthChanged(() => {
@@ -65,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       clearToken();
       setUser(null);
+      void queryClient.invalidateQueries();
 
       toast({
         variant: 'destructive',
@@ -77,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionExpiredRef.current = false;
       }, 2000);
     });
-  }, [toast]);
+  }, [toast, queryClient]);
 
   const refreshUser = useCallback(async () => {
     if (enableDemoAuth && getToken() === 'demo-token') {
@@ -93,22 +106,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (enableDemoAuth && email === DEMO_CREDENTIALS.email && password === DEMO_CREDENTIALS.password) {
       setToken('demo-token');
       setUser(DEMO_USER);
+      void queryClient.invalidateQueries();
       return;
     }
     await authApi.login({ email, password });
     await refreshUser();
-  }, [enableDemoAuth, refreshUser]);
+    void queryClient.invalidateQueries();
+  }, [enableDemoAuth, refreshUser, queryClient]);
 
   const register = useCallback(async (email: string, password: string, name: string) => {
     await authApi.register({ email, password, full_name: name });
     await authApi.login({ email, password });
     await refreshUser();
-  }, [refreshUser]);
+    void queryClient.invalidateQueries();
+  }, [refreshUser, queryClient]);
 
   const logout = useCallback(async () => {
     await authApi.logout();
     setUser(null);
-  }, []);
+    void queryClient.invalidateQueries();
+  }, [queryClient]);
 
   return <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>{children}</AuthContext.Provider>;
 }

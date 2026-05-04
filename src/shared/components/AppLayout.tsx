@@ -3,14 +3,19 @@ import { Link, Outlet } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
-import { Bell, Moon, Sun, UserRound } from 'lucide-react';
+import { Bell, Moon, Sun } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthContext';
 import { notificationsApi } from '@/shared/api/notifications';
+import { usersApi } from '@/shared/api/users';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 export function AppLayout() {
   const { theme, setTheme, systemTheme } = useTheme();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const resolvedTheme = theme === 'system' ? systemTheme : theme;
   const isDark = resolvedTheme === 'dark';
 
@@ -29,7 +34,16 @@ export function AppLayout() {
     },
   });
 
+  // Fetch fresh user data including profile picture
+  const userQ = useQuery({
+    queryKey: ['profile-me'],
+    queryFn: usersApi.me,
+    enabled: !!user,
+  });
+
   const unreadCount = unreadCountQ.data ?? 0;
+  // Use React Query user data if available, fall back to AuthContext user
+  const displayUser = userQ.data ?? user;
 
   return (
     <SidebarProvider>
@@ -38,8 +52,9 @@ export function AppLayout() {
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-12 flex items-center border-b bg-card px-4 shrink-0">
             <SidebarTrigger />
-            <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" size="icon" asChild aria-label="Open notifications" className="relative">
+            <div className="ms-auto flex items-center gap-2">
+              <LanguageSwitcher />
+              <Button variant="ghost" size="icon" asChild aria-label={t('shell.openNotifications')} className="relative">
                 <Link to="/notifications">
                   <Bell className="h-4 w-4" />
                   {unreadCount > 0 ? (
@@ -49,15 +64,24 @@ export function AppLayout() {
                   ) : null}
                 </Link>
               </Button>
-              <Button variant="ghost" size="icon" asChild aria-label="Open profile">
-                <Link to="/profile">
-                  <UserRound className="h-4 w-4" />
+              <Button variant="ghost" size="icon" asChild aria-label={t('shell.openProfile')} className="h-8 w-8">
+                <Link to="/profile" className="flex items-center justify-center">
+                  <Avatar className="h-6 w-6 border border-border/50 overflow-hidden">
+                    {displayUser?.profile_picture_url && <AvatarImage src={displayUser.profile_picture_url} alt="Profile" className="h-full w-full object-cover" />}
+                    <AvatarFallback className="bg-muted text-muted-foreground text-[10px] font-semibold">
+                      {(displayUser?.full_name || displayUser?.name || 'U')
+                        .split(' ')
+                        .slice(0, 2)
+                        .map(n => n[0]?.toUpperCase())
+                        .join('')}
+                    </AvatarFallback>
+                  </Avatar>
                 </Link>
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Toggle dark mode"
+                aria-label={t('shell.toggleTheme')}
                 onClick={() => setTheme(isDark ? 'light' : 'dark')}
               >
                 {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

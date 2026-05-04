@@ -35,6 +35,7 @@ function mapManagedUser(raw: any): ManagedUser {
     can_reply_conversations: Boolean(raw?.can_reply_conversations ?? true),
     can_reply_whatsapp: Boolean(raw?.can_reply_whatsapp ?? true),
     is_vip: Boolean(raw?.is_vip ?? false),
+    profile_picture_url: raw?.profile_picture_url ?? null,
     created_at: String(raw?.created_at ?? ''),
     updated_at: String(raw?.updated_at ?? ''),
   };
@@ -56,6 +57,7 @@ function mapCurrentUser(raw: any): User {
     teams_webhook_url: raw?.teams_webhook_url ?? null,
     timezone: raw?.timezone ? String(raw.timezone) : undefined,
     locale: raw?.locale ? String(raw.locale) : undefined,
+    profile_picture_url: raw?.profile_picture_url ?? null,
     must_change_password: Boolean(raw?.must_change_password ?? false),
     profile_completed: Boolean(raw?.profile_completed ?? false),
     profile_completion_required: Boolean(raw?.profile_completion_required ?? false),
@@ -121,4 +123,14 @@ export const usersApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  uploadProfilePicture: async (file: File): Promise<User> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await apiClient<any>('/users/me/profile-picture', {
+      method: 'POST',
+      body: formData,
+    });
+    return mapCurrentUser(response);
+  },
 };

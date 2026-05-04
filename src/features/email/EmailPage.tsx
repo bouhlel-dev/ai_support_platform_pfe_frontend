@@ -31,6 +31,7 @@ import {
   Unlink,
   XCircle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 type ThreadSummary = {
   key: string;
@@ -336,6 +337,7 @@ function groupEmailsByThread(emails: Email[]): ThreadSummary[] {
 }
 
 export function EmailPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
 
   const [folder, setFolder] = useState<EmailMailboxFolder>('inbox');
@@ -360,6 +362,11 @@ export function EmailPage() {
   const [composeLabels, setComposeLabels] = useState('');
 
   const [bulkLabel, setBulkLabel] = useState('');
+
+  const deliveryStatusQ = useQuery({
+    queryKey: ['emails-delivery-status'],
+    queryFn: emailApi.deliveryStatus,
+  });
 
   const gmailStatusQ = useQuery({
     queryKey: ['gmail-status'],
@@ -477,6 +484,7 @@ export function EmailPage() {
         title: 'Gmail sync queued',
         description: `Fetched ${res.emails_fetched}, ingested ${res.emails_ingested}, errors ${res.errors}.`,
       });
+      void deliveryStatusQ.refetch();
       void gmailStatusQ.refetch();
       void mailboxQ.refetch();
       if (selectedThread) {
@@ -524,6 +532,7 @@ export function EmailPage() {
       setComposeBody('');
       setComposeLabels('');
       setFolder('sent');
+      void deliveryStatusQ.refetch();
       void mailboxQ.refetch();
       void gmailStatusQ.refetch();
     },
@@ -616,6 +625,7 @@ export function EmailPage() {
   });
 
   const gmailStatus = gmailStatusQ.data;
+  const deliveryStatus = deliveryStatusQ.data;
   const mailboxBusy = mailboxQ.isLoading || mailboxQ.isFetching;
   const threadBusy = threadQ.isLoading || threadQ.isFetching;
   const actionsBusy =
@@ -678,7 +688,7 @@ export function EmailPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Email Workspace</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Inbox, thread reading, compose, and mailbox controls without leaving the app.
+            {t('email.workspaceSubtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -688,20 +698,21 @@ export function EmailPage() {
             onClick={() => setComposeOpen((prev) => !prev)}
           >
             <Plus className="h-4 w-4 mr-1" />
-            {composeOpen ? 'Close compose' : 'Compose'}
+            {composeOpen ? t('email.closeCompose') : t('email.compose')}
           </Button>
           <Button
             size="sm"
             variant="outline"
             onClick={() => syncMut.mutate()}
             disabled={syncMut.isPending || !gmailStatus?.connected}
+            title={t('email.syncGmailInbox')}
           >
             {syncMut.isPending ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4 mr-1" />
             )}
-            Sync
+            {t('email.sync')}
           </Button>
         </div>
       </div>
@@ -758,6 +769,28 @@ export function EmailPage() {
         </div>
       ) : null}
 
+      {deliveryStatus ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/70 p-3.5">
+          {deliveryStatus.ready ? (
+            <CheckCircle className="h-4 w-4 text-success" />
+          ) : (
+            <XCircle className="h-4 w-4 text-destructive" />
+          )}
+          <span className="text-sm">
+            Outbound delivery: {deliveryStatus.mail_mode === 'smtp' ? 'SMTP' : 'Gmail'}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {deliveryStatus.mail_mode === 'smtp'
+              ? deliveryStatus.ready
+                ? `Sender: ${deliveryStatus.smtp_sender_email || 'configured'}`
+                : `Missing: ${deliveryStatus.smtp_missing_fields.join(', ')}`
+              : deliveryStatus.ready
+                ? `Connected: ${deliveryStatus.gmail_address || 'Unknown account'}`
+                : 'Connect Gmail to send outbound mail in Gmail mode'}
+          </span>
+        </div>
+      ) : null}
+
       {composeOpen ? (
         <div className="rounded-xl border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
@@ -770,17 +803,17 @@ export function EmailPage() {
               type="email"
               value={composeTo}
               onChange={(event) => setComposeTo(event.target.value)}
-              placeholder="To"
+              placeholder={t('email.toField')}
             />
             <Input
               value={composeSubject}
               onChange={(event) => setComposeSubject(event.target.value)}
-              placeholder="Subject"
+              placeholder={t('email.subjectField')}
             />
             <Input
               value={composeLabels}
               onChange={(event) => setComposeLabels(event.target.value)}
-              placeholder="Labels (comma separated, optional)"
+              placeholder={t('email.labelsField')}
             />
           </div>
 
@@ -788,17 +821,19 @@ export function EmailPage() {
             rows={6}
             value={composeBody}
             onChange={(event) => setComposeBody(event.target.value)}
-            placeholder="Write your email..."
+            placeholder={t('email.composeField')}
           />
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              Composed emails are sent through your connected Gmail account.
+              {deliveryStatus?.mail_mode === 'smtp'
+                ? 'Composed emails are sent through the configured SMTP server.'
+                : 'Composed emails are sent through your connected Gmail account.'}
             </p>
             <Button
               onClick={() => composeMut.mutate()}
               disabled={
-                !gmailStatus?.connected ||
+                !deliveryStatus?.ready ||
                 !composeTo.trim() ||
                 !composeSubject.trim() ||
                 !composeBody.trim() ||
@@ -810,7 +845,7 @@ export function EmailPage() {
               ) : (
                 <SendHorizontal className="h-4 w-4 mr-1" />
               )}
-              Send Email
+              {t('email.sendEmail')}
             </Button>
           </div>
         </div>
@@ -822,12 +857,12 @@ export function EmailPage() {
             className="md:col-span-2"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search subject, sender, recipient, message"
+            placeholder={t('email.searchSubject')}
           />
 
           <Select value={folder} onValueChange={(value) => setFolder(value as EmailMailboxFolder)}>
             <SelectTrigger>
-              <SelectValue placeholder="Folder" />
+              <SelectValue placeholder={t('email.folderSelect')} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="inbox">Inbox</SelectItem>
@@ -841,12 +876,12 @@ export function EmailPage() {
             onValueChange={(value) => setStatusFilter(value as (typeof EMAIL_STATUS_OPTIONS)[number])}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={t('email.statusSelect')} />
             </SelectTrigger>
             <SelectContent>
               {EMAIL_STATUS_OPTIONS.map((status) => (
                 <SelectItem key={status} value={status}>
-                  {status === 'all' ? 'All statuses' : statusLabel(status)}
+                  {status === 'all' ? t('email.allStatuses') : statusLabel(status)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -855,7 +890,7 @@ export function EmailPage() {
           <Input
             value={labelFilter}
             onChange={(event) => setLabelFilter(event.target.value)}
-            placeholder="Filter label"
+            placeholder={t('email.filterLabel')}
           />
         </div>
 
@@ -866,7 +901,7 @@ export function EmailPage() {
             className="h-8 rounded-full px-3"
             onClick={() => setShowUnreadOnly((prev) => !prev)}
           >
-            Unread only
+            {t('email.unreadOnly')}
           </Button>
           <Button
             size="sm"
@@ -874,7 +909,7 @@ export function EmailPage() {
             className="h-8 rounded-full px-3"
             onClick={() => setShowStarredOnly((prev) => !prev)}
           >
-            Starred only
+            {t('email.starredOnly')}
           </Button>
           {(showUnreadOnly || showStarredOnly || labelFilter.trim()) ? (
             <Button
@@ -887,7 +922,7 @@ export function EmailPage() {
                 setLabelFilter('');
               }}
             >
-              Clear quick filters
+              {t('email.clearQuickFilters')}
             </Button>
           ) : null}
         </div>
@@ -915,7 +950,7 @@ export function EmailPage() {
               className="max-w-[220px]"
               value={bulkLabel}
               onChange={(event) => setBulkLabel(event.target.value)}
-              placeholder="Label"
+              placeholder={t('email.addLabel')}
               disabled={actionsBusy}
             />
             <Button
@@ -956,7 +991,7 @@ export function EmailPage() {
                 checked={allThreadsSelected}
                 onChange={toggleSelectAllThreads}
               />
-              Threads
+              {t('email.threads')}
             </label>
             <span className="text-xs text-muted-foreground">{mailboxQ.data?.total ?? 0} emails</span>
           </div>
@@ -966,10 +1001,10 @@ export function EmailPage() {
           ) : mailboxBusy ? (
             <div className="p-4 text-sm text-muted-foreground inline-flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading mailbox...
+              {t('email.loadingMailbox')}
             </div>
           ) : !threadSummaries.length ? (
-            <EmptyState title="No emails" description="Your selected mailbox view is empty." />
+            <EmptyState title={t('email.noEmails')} description={t('email.selectedMailboxEmpty')} />
           ) : (
             <div className="max-h-[65vh] overflow-y-auto divide-y">
               {threadSummaries.map((thread) => {
@@ -1021,7 +1056,7 @@ export function EmailPage() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <p className={`text-sm line-clamp-1 ${thread.unreadCount > 0 ? 'font-semibold' : 'font-medium'}`}>
-                            {thread.latest.subject || '(No subject)'}
+                            {thread.latest.subject || t('email.noSubject')}
                           </p>
                           <span className="text-xs text-muted-foreground shrink-0">
                             {formatDate(thread.latest.created_at)}
@@ -1065,21 +1100,21 @@ export function EmailPage() {
 
         <div className="rounded-xl border bg-card overflow-hidden">
           {!selectedThread ? (
-            <EmptyState title="No thread selected" description="Pick a thread from the mailbox list." />
+            <EmptyState title={t('email.noThreadSelected')} description={t('email.pickThread')} />
           ) : threadQ.error ? (
             <ErrorState message={normalizeError(threadQ.error)} onRetry={() => threadQ.refetch()} />
           ) : threadBusy ? (
             <div className="p-4 text-sm text-muted-foreground inline-flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading thread...
+              {t('email.loadingThread')}
             </div>
           ) : !threadEmails.length ? (
-            <EmptyState title="Thread is empty" description="No messages found for this thread." />
+            <EmptyState title={t('email.threadEmpty')} description={t('email.noMessagesThread')} />
           ) : (
             <div className="flex min-h-[65vh] flex-col">
               <div className="border-b bg-card/50 p-4 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold">{selectedThread.latest.subject || '(No subject)'}</p>
+                  <p className="text-sm font-semibold">{selectedThread.latest.subject || t('email.noSubject')}</p>
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
@@ -1236,16 +1271,17 @@ export function EmailPage() {
                   rows={4}
                   value={replyBody}
                   onChange={(event) => setReplyBody(event.target.value)}
-                  placeholder={
+                    placeholder={
                     latestInboundEmail
-                      ? 'Write your reply...'
-                      : 'Reply is disabled until an inbound message exists in this thread.'
+                      ? t('email.writeReply')
+                      : t('email.replyDisabledNoInbound')
                   }
                   disabled={!latestInboundEmail || actionsBusy}
                   onKeyDown={(event) => {
                     if (
                       event.key === 'Enter'
                       && (event.ctrlKey || event.metaKey)
+                      && deliveryStatus?.ready
                       && latestInboundEmail
                       && replyBody.trim()
                       && !actionsBusy
@@ -1262,7 +1298,7 @@ export function EmailPage() {
                   </p>
                   <Button
                     onClick={() => replyMut.mutate()}
-                    disabled={!latestInboundEmail || !replyBody.trim() || actionsBusy}
+                    disabled={!deliveryStatus?.ready || !latestInboundEmail || !replyBody.trim() || actionsBusy}
                   >
                     {replyMut.isPending ? (
                       <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -1280,7 +1316,9 @@ export function EmailPage() {
 
       {!gmailStatus?.connected ? (
         <div className="rounded-lg border border-amber-400/50 bg-amber-400/10 p-3 text-sm text-amber-700 dark:text-amber-300">
-          Gmail is not connected. Use Connect Gmail above, complete authorization, then Sync.
+          {deliveryStatus?.mail_mode === 'smtp'
+            ? 'Gmail is not connected, so Gmail inbox sync is unavailable. Outbound email can still be sent through SMTP.'
+            : 'Gmail is not connected. Use Connect Gmail above, complete authorization, then Sync.'}
         </div>
       ) : null}
     </div>

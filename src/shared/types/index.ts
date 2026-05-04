@@ -26,6 +26,7 @@ export interface User {
   teams_webhook_url?: string | null;
   timezone?: string;
   locale?: string;
+  profile_picture_url?: string | null;
   must_change_password?: boolean;
   profile_completed?: boolean;
   profile_completion_required?: boolean;
@@ -397,6 +398,17 @@ export interface GmailStatus {
   gmail_address?: string | null;
   is_active: boolean;
   last_synced?: string | null;
+}
+
+export interface EmailDeliveryStatus {
+  mail_mode: MailMode;
+  ready: boolean;
+  gmail_connected: boolean;
+  gmail_address?: string | null;
+  gmail_last_synced?: string | null;
+  smtp_ready: boolean;
+  smtp_sender_email?: string | null;
+  smtp_missing_fields: string[];
 }
 
 export interface GmailSyncResult {
@@ -915,6 +927,7 @@ export interface ManagedUser {
   can_reply_conversations: boolean;
   can_reply_whatsapp: boolean;
   is_vip?: boolean;
+  profile_picture_url?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1000,7 +1013,6 @@ export interface AdminSettings {
   smtp_password: string;
   notify_new_ticket: boolean;
   notify_status_change: boolean;
-  notify_new_comment: boolean;
   notify_assigned: boolean;
   notify_overdue: boolean;
   notify_resolved: boolean;

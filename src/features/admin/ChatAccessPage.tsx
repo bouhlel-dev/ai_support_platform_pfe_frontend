@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { normalizeError } from '@/shared/api/client';
 import { usersApi } from '@/shared/api/users';
@@ -52,6 +53,7 @@ function AccessBadge({ user }: { user: ManagedUser }) {
 }
 
 export function ChatAccessPage() {
+  const { t } = useTranslation();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -82,13 +84,13 @@ export function ChatAccessPage() {
       void queryClient.invalidateQueries({ queryKey: ['admin-users-directory'] });
       toast({
         title: `${updated.full_name} updated`,
-        description: 'Reply access settings saved.',
+        description: t('chatAccess.replyAccessSaved'),
       });
     },
     onError: (error) => {
       toast({
         variant: 'destructive',
-        title: 'Could not update access settings',
+        title: t('chatAccess.updateAccessFailed'),
         description: normalizeError(error),
       });
     },
@@ -158,9 +160,9 @@ export function ChatAccessPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Chat Reply Access</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('chatAccess.title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose who can reply in Conversations and WhatsApp. Disable access to keep accounts in read-only mode.
+            {t('chatAccess.subtitle')}
           </p>
         </div>
         <Button
@@ -169,7 +171,7 @@ export function ChatAccessPage() {
             void usersQ.refetch();
           }}
         >
-          Refresh
+          {t('whatsapp.refreshLabel')}
         </Button>
       </div>
 
@@ -203,7 +205,7 @@ export function ChatAccessPage() {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name or email"
+              placeholder={t('chatAccess.searchUsersChat')}
               className="pl-8"
             />
           </div>
@@ -234,12 +236,12 @@ export function ChatAccessPage() {
         ) : usersQ.isLoading ? (
           <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading access controls...
+            {t('chatAccess.loadingAccessControls')}
           </div>
         ) : users.length === 0 ? (
           <EmptyState
-            title="No users found"
-            description="No operator accounts match the current filters."
+            title={t('chatAccess.noUsersFound')}
+            description={t('chatAccess.noOperators')}
           />
         ) : (
           <Table>

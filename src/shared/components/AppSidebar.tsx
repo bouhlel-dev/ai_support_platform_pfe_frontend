@@ -1,7 +1,9 @@
 import { useAuth } from '@/features/auth/AuthContext';
+import { useQuery } from '@tanstack/react-query';
 import { NavLink } from '@/components/NavLink';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar,
@@ -9,47 +11,49 @@ import {
 import {
   LayoutDashboard, Ticket, MessageSquare, Mail, MessageCircle,
   Brain, Database, Eye, Settings, LogOut, QrCode,
-  AlertTriangle, Phone, PhoneCall, Mic, ShieldCheck, Users, ScrollText, UserRound, Bell, SlidersHorizontal,
+  AlertTriangle, Phone, PhoneCall, Mic, ShieldCheck, Users, ScrollText, UserRound, Bell, SlidersHorizontal, FileText,
 } from 'lucide-react';
+import { usersApi } from '@/shared/api/users';
+import { useTranslation } from 'react-i18next';
+import { isRtlLanguage } from '@/shared/i18n/DirectionSync';
 
 const operatorNavItems = [
-  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
-  { title: 'Tickets', url: '/tickets', icon: Ticket },
-  { title: 'Conversations', url: '/conversations', icon: MessageSquare },
-  { title: 'Email', url: '/email', icon: Mail },
-  { title: 'WhatsApp', url: '/whatsapp', icon: MessageCircle },
-  { title: 'Decisions', url: '/decisions', icon: Brain },
-  { title: 'RAG', url: '/rag', icon: Database },
-  { title: 'Visual AI', url: '/visual-ai', icon: Eye },
-  { title: 'Notifications', url: '/notifications', icon: Bell },
-  { title: 'Profile', url: '/profile', icon: UserRound },
+  { titleKey: 'common.dashboard', url: '/', icon: LayoutDashboard },
+  { titleKey: 'common.tickets', url: '/tickets', icon: Ticket },
+  { titleKey: 'common.conversations', url: '/conversations', icon: MessageSquare },
+  { titleKey: 'common.emailChannel', url: '/email', icon: Mail },
+  { titleKey: 'common.whatsapp', url: '/whatsapp', icon: MessageCircle },
+  { titleKey: 'common.decisions', url: '/decisions', icon: Brain },
+  { titleKey: 'common.rag', url: '/rag', icon: Database },
+  { titleKey: 'common.visualAi', url: '/visual-ai', icon: Eye },
+  { titleKey: 'common.notifications', url: '/notifications', icon: Bell },
 ];
 
 const clientNavItems = [
-  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
-  { title: 'Support Chat', url: '/conversations', icon: MessageSquare },
-  { title: 'Tickets', url: '/tickets', icon: Ticket },
-  { title: 'Notifications', url: '/notifications', icon: Bell },
-  { title: 'Profile', url: '/profile', icon: UserRound },
+  { titleKey: 'common.dashboard', url: '/', icon: LayoutDashboard },
+  { titleKey: 'common.conversations', url: '/conversations', icon: MessageSquare },
+  { titleKey: 'common.tickets', url: '/tickets', icon: Ticket },
+  { titleKey: 'common.notifications', url: '/notifications', icon: Bell },
 ];
 
 const adminItems = [
-  { title: 'Admins', url: '/admins', icon: ShieldCheck },
-  { title: 'Agents', url: '/agents', icon: UserRound },
-  { title: 'Clients', url: '/clients', icon: Users },
-  { title: 'Chat Access', url: '/chat-access', icon: MessageSquare },
-  { title: 'Supervision', url: '/supervision', icon: Eye },
-  { title: 'QR Bridge', url: '/qr', icon: QrCode },
-  { title: 'Voice Agents Runtime', url: '/voice-agents', icon: Phone },
-  { title: 'Decision Config', url: '/decisions/config', icon: SlidersHorizontal },
-  { title: 'Logs & Audit', url: '/logs', icon: ScrollText },
-  { title: 'Settings', url: '/settings', icon: Settings },
+  { titleKey: 'common.admins', url: '/admins', icon: ShieldCheck },
+  { titleKey: 'common.agents', url: '/agents', icon: UserRound },
+  { titleKey: 'common.clients', url: '/clients', icon: Users },
+  { titleKey: 'common.chatAccess', url: '/chat-access', icon: MessageSquare },
+  { titleKey: 'common.supervision', url: '/supervision', icon: Eye },
+  { titleKey: 'common.qrBridge', url: '/qr', icon: QrCode },
+  { titleKey: 'common.voiceAgentsRuntime', url: '/voice-agents', icon: Phone },
+  { titleKey: 'common.aiDraftSnippets', url: '/ai-draft-snippets', icon: FileText },
+  { titleKey: 'common.decisionConfig', url: '/decisions/config', icon: SlidersHorizontal },
+  { titleKey: 'common.logsAudit', url: '/logs', icon: ScrollText },
+  { titleKey: 'common.settings', url: '/settings', icon: Settings },
 ];
 
 const agentItems = [
-  { title: 'Escalations', url: '/escalations', icon: AlertTriangle },
-  { title: 'Test Voice Agent', url: '/test-agent', icon: Mic },
-  { title: 'Voice Calls', url: '/voice-calls', icon: PhoneCall },
+  { titleKey: 'common.escalations', url: '/escalations', icon: AlertTriangle },
+  { titleKey: 'common.testVoiceAgent', url: '/test-agent', icon: Mic },
+  { titleKey: 'common.voiceCallTranscripts', url: '/voice-calls', icon: PhoneCall },
 ];
 
 export function AppSidebar() {
@@ -57,19 +61,30 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const location = useLocation();
+  const { t, i18n } = useTranslation();
+  const isRtl = isRtlLanguage(i18n.resolvedLanguage || i18n.language);
+  const userQ = useQuery({
+    queryKey: ['sidebar-profile-me'],
+    queryFn: usersApi.me,
+    enabled: !!user,
+  });
   const isActive = (path: string) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
   const navItems = user?.role === 'client' ? clientNavItems : operatorNavItems;
+  const displayUser = userQ.data ?? user;
+  const translatedNavItems = navItems.map((item) => ({ ...item, title: t(item.titleKey) }));
+  const translatedAgentItems = agentItems.map((item) => ({ ...item, title: t(item.titleKey) }));
+  const translatedAdminItems = adminItems.map((item) => ({ ...item, title: t(item.titleKey) }));
 
   return (
-    <Sidebar collapsible="icon" className="border-r-0">
+    <Sidebar side={isRtl ? 'right' : 'left'} collapsible="icon" className={isRtl ? 'border-l-0' : 'border-r-0'}>
       <SidebarContent className="bg-sidebar">
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
-            {!collapsed && 'Support Ops'}
+            {!collapsed && t('shell.supportOps')}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map(item => (
+              {translatedNavItems.map(item => (
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton asChild>
                     <NavLink
@@ -78,7 +93,7 @@ export function AppSidebar() {
                       className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
                     >
-                      <item.icon className="h-4 w-4 mr-2 shrink-0" />
+                      <item.icon className="h-4 w-4 me-2 shrink-0" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
@@ -91,11 +106,11 @@ export function AppSidebar() {
         {(user?.role === 'agent' || user?.role === 'admin') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
-              {!collapsed && 'Agent Workspace'}
+              {!collapsed && t('shell.agentWorkspace')}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {agentItems.map(item => (
+                {translatedAgentItems.map(item => (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild>
                       <NavLink
@@ -103,7 +118,7 @@ export function AppSidebar() {
                         className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
                       >
-                        <item.icon className="h-4 w-4 mr-2 shrink-0" />
+                        <item.icon className="h-4 w-4 me-2 shrink-0" />
                         {!collapsed && <span>{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
@@ -117,11 +132,11 @@ export function AppSidebar() {
         {user?.role === 'admin' && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
-              {!collapsed && 'Admin'}
+              {!collapsed && t('shell.admin')}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminItems.map(item => (
+                {translatedAdminItems.map(item => (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild>
                       <NavLink
@@ -129,7 +144,7 @@ export function AppSidebar() {
                         className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
                       >
-                        <item.icon className="h-4 w-4 mr-2 shrink-0" />
+                        <item.icon className="h-4 w-4 me-2 shrink-0" />
                         {!collapsed && <span>{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
@@ -142,14 +157,31 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="bg-sidebar border-t border-sidebar-border p-3">
-        {!collapsed && user && (
-          <div className="mb-2 px-2">
-            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">{user.name}</p>
-            <p className="text-xs text-sidebar-foreground/50 truncate">{user.email}</p>
-          </div>
+        {!collapsed && displayUser && (
+          <Link
+            to="/profile"
+            className="mb-2 flex items-center gap-3 px-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
+          >
+            <Avatar className="h-10 w-10 shrink-0 border border-sidebar-border">
+              {displayUser.profile_picture_url && (
+                <AvatarImage src={displayUser.profile_picture_url} alt="Profile" />
+              )}
+              <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs font-semibold">
+                {(displayUser.full_name || displayUser.name || 'U')
+                  .split(' ')
+                  .slice(0, 2)
+                  .map(n => n[0]?.toUpperCase())
+                  .join('')}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-sidebar-accent-foreground truncate">{displayUser.name}</p>
+              <p className="text-xs text-sidebar-foreground/50 truncate">{displayUser.email}</p>
+            </div>
+          </Link>
         )}
         <Button variant="ghost" size="sm" onClick={() => { void logout(); }} className="w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent">
-          <LogOut className="h-4 w-4 mr-2" />{!collapsed && 'Sign out'}
+          <LogOut className="h-4 w-4 me-2" />{!collapsed && t('common.signOut')}
         </Button>
       </SidebarFooter>
     </Sidebar>
