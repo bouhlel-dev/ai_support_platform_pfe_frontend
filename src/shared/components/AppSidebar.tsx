@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/sidebar';
 import {
   LayoutDashboard, Ticket, MessageSquare, Mail, MessageCircle,
-  Brain, Database, Eye, Settings, LogOut, QrCode,
-  AlertTriangle, Phone, PhoneCall, Mic, ShieldCheck, Users, ScrollText, UserRound, Bell, SlidersHorizontal, FileText,
+  Settings, LogOut, QrCode,
+  AlertTriangle, Phone, PhoneCall, ShieldCheck, Users, ScrollText, UserRound, Bell, SlidersHorizontal, FileText, Eye,
 } from 'lucide-react';
 import { usersApi } from '@/shared/api/users';
 import { useTranslation } from 'react-i18next';
@@ -23,9 +23,8 @@ const operatorNavItems = [
   { titleKey: 'common.conversations', url: '/conversations', icon: MessageSquare },
   { titleKey: 'common.emailChannel', url: '/email', icon: Mail },
   { titleKey: 'common.whatsapp', url: '/whatsapp', icon: MessageCircle },
-  { titleKey: 'common.decisions', url: '/decisions', icon: Brain },
-  { titleKey: 'common.rag', url: '/rag', icon: Database },
-  { titleKey: 'common.visualAi', url: '/visual-ai', icon: Eye },
+  { titleKey: 'common.escalations', url: '/escalations', icon: AlertTriangle },
+  { titleKey: 'common.voiceCallTranscripts', url: '/voice-calls', icon: PhoneCall },
   { titleKey: 'common.notifications', url: '/notifications', icon: Bell },
 ];
 
@@ -50,12 +49,6 @@ const adminItems = [
   { titleKey: 'common.settings', url: '/settings', icon: Settings },
 ];
 
-const agentItems = [
-  { titleKey: 'common.escalations', url: '/escalations', icon: AlertTriangle },
-  { titleKey: 'common.testVoiceAgent', url: '/test-agent', icon: Mic },
-  { titleKey: 'common.voiceCallTranscripts', url: '/voice-calls', icon: PhoneCall },
-];
-
 export function AppSidebar() {
   const { user, logout } = useAuth();
   const { state } = useSidebar();
@@ -72,7 +65,6 @@ export function AppSidebar() {
   const navItems = user?.role === 'client' ? clientNavItems : operatorNavItems;
   const displayUser = userQ.data ?? user;
   const translatedNavItems = navItems.map((item) => ({ ...item, title: t(item.titleKey) }));
-  const translatedAgentItems = agentItems.map((item) => ({ ...item, title: t(item.titleKey) }));
   const translatedAdminItems = adminItems.map((item) => ({ ...item, title: t(item.titleKey) }));
 
   return (
@@ -102,32 +94,6 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {(user?.role === 'agent' || user?.role === 'admin') && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
-              {!collapsed && t('shell.agentWorkspace')}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {translatedAgentItems.map(item => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.url}
-                        className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                      >
-                        <item.icon className="h-4 w-4 me-2 shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
 
         {user?.role === 'admin' && (
           <SidebarGroup>
