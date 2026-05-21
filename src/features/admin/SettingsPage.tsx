@@ -11,6 +11,7 @@ import {
   Save,
   Settings2,
   ShieldCheck,
+  Smartphone,
   Ticket,
   Upload,
   Wrench,
@@ -20,6 +21,7 @@ import {
   Zap,
   Lock,
   Mail,
+  MessageSquare,
   Server,
 } from 'lucide-react';
 
@@ -38,7 +40,8 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { ApiError, getToken, normalizeError } from '@/shared/api/client';
+import { useTranslation } from 'react-i18next';
+import { apiClient, ApiError, getToken, normalizeError } from '@/shared/api/client';
 import { getClientConfigRaw } from '@/shared/config/clientConfig';
 import { settingsApi } from '@/shared/api/settings';
 import { voiceAgentsApi, type VoiceAgentConfig } from '@/shared/api/voiceAgents';
@@ -70,7 +73,7 @@ type ThemeMode = 'light' | 'dark' | 'system';
 type AutoAssignmentMethod = 'Round-robin' | 'By category' | 'By workload';
 type MailMode = 'gmail' | 'smtp';
 type SmtpEncryption = 'tls' | 'ssl' | 'none';
-type SettingsSection = 'general' | 'branding' | 'tickets' | 'security' | 'notifications' | 'automation';
+type SettingsSection = 'general' | 'branding' | 'tickets' | 'security' | 'notifications' | 'automation' | 'sms';
 
 type AdvancedSettings = {
   app_name: string;
@@ -96,7 +99,6 @@ type AdvancedSettings = {
   allow_registration: boolean;
   require_email_verification: boolean;
   two_factor_auth: boolean;
-  require_admin_profile_completion: boolean;
   mail_mode: MailMode;
   gmail_from_email: string;
   gmail_client_id: string;
@@ -114,6 +116,14 @@ type AdvancedSettings = {
   notify_assigned: boolean;
   notify_overdue: boolean;
   notify_resolved: boolean;
+  sms_api_url: string;
+  sms_api_key: string;
+  sms_sender: string;
+  sms_language: string;
+  sms_notify_new_ticket: boolean;
+  sms_notify_status_change: boolean;
+  sms_notify_reply: boolean;
+  sms_notify_resolved: boolean;
   ai_auto_reply_chat_enabled: boolean;
   ai_auto_reply_whatsapp_enabled: boolean;
   ai_auto_reply_email_enabled: boolean;
@@ -148,7 +158,6 @@ const DEFAULT_ADVANCED_SETTINGS: AdvancedSettings = {
   allow_registration: true,
   require_email_verification: false,
   two_factor_auth: false,
-  require_admin_profile_completion: false,
   mail_mode: 'gmail',
   gmail_from_email: '',
   gmail_client_id: '',
@@ -166,6 +175,14 @@ const DEFAULT_ADVANCED_SETTINGS: AdvancedSettings = {
   notify_assigned: true,
   notify_overdue: true,
   notify_resolved: true,
+  sms_api_url: '',
+  sms_api_key: '',
+  sms_sender: 'L2T',
+  sms_language: 'en',
+  sms_notify_new_ticket: false,
+  sms_notify_status_change: false,
+  sms_notify_reply: false,
+  sms_notify_resolved: false,
   ai_auto_reply_chat_enabled: true,
   ai_auto_reply_whatsapp_enabled: true,
   ai_auto_reply_email_enabled: true,
@@ -277,7 +294,6 @@ function normalizeAdvancedSettings(raw: unknown): AdvancedSettings {
     allow_registration: coerceBoolean(input.allow_registration, DEFAULT_ADVANCED_SETTINGS.allow_registration),
     require_email_verification: coerceBoolean(input.require_email_verification, DEFAULT_ADVANCED_SETTINGS.require_email_verification),
     two_factor_auth: coerceBoolean(input.two_factor_auth, DEFAULT_ADVANCED_SETTINGS.two_factor_auth),
-    require_admin_profile_completion: coerceBoolean(input.require_admin_profile_completion, DEFAULT_ADVANCED_SETTINGS.require_admin_profile_completion),
     mail_mode: coerceEnum(input.mail_mode, DEFAULT_ADVANCED_SETTINGS.mail_mode, ['gmail', 'smtp']),
     gmail_from_email: coerceString(input.gmail_from_email, DEFAULT_ADVANCED_SETTINGS.gmail_from_email),
     gmail_client_id: coerceString(input.gmail_client_id, DEFAULT_ADVANCED_SETTINGS.gmail_client_id),
@@ -295,6 +311,14 @@ function normalizeAdvancedSettings(raw: unknown): AdvancedSettings {
     notify_assigned: coerceBoolean(input.notify_assigned, DEFAULT_ADVANCED_SETTINGS.notify_assigned),
     notify_overdue: coerceBoolean(input.notify_overdue, DEFAULT_ADVANCED_SETTINGS.notify_overdue),
     notify_resolved: coerceBoolean(input.notify_resolved, DEFAULT_ADVANCED_SETTINGS.notify_resolved),
+    sms_api_url: coerceString(input.sms_api_url, DEFAULT_ADVANCED_SETTINGS.sms_api_url),
+    sms_api_key: coerceString(input.sms_api_key, DEFAULT_ADVANCED_SETTINGS.sms_api_key),
+    sms_sender: coerceString(input.sms_sender, DEFAULT_ADVANCED_SETTINGS.sms_sender),
+    sms_language: coerceEnum(input.sms_language, DEFAULT_ADVANCED_SETTINGS.sms_language, ['en', 'fr', 'ar']),
+    sms_notify_new_ticket: coerceBoolean(input.sms_notify_new_ticket, DEFAULT_ADVANCED_SETTINGS.sms_notify_new_ticket),
+    sms_notify_status_change: coerceBoolean(input.sms_notify_status_change, DEFAULT_ADVANCED_SETTINGS.sms_notify_status_change),
+    sms_notify_reply: coerceBoolean(input.sms_notify_reply, DEFAULT_ADVANCED_SETTINGS.sms_notify_reply),
+    sms_notify_resolved: coerceBoolean(input.sms_notify_resolved, DEFAULT_ADVANCED_SETTINGS.sms_notify_resolved),
     ai_auto_reply_chat_enabled: coerceBoolean(input.ai_auto_reply_chat_enabled, DEFAULT_ADVANCED_SETTINGS.ai_auto_reply_chat_enabled),
     ai_auto_reply_whatsapp_enabled: coerceBoolean(input.ai_auto_reply_whatsapp_enabled, DEFAULT_ADVANCED_SETTINGS.ai_auto_reply_whatsapp_enabled),
     ai_auto_reply_email_enabled: coerceBoolean(input.ai_auto_reply_email_enabled, DEFAULT_ADVANCED_SETTINGS.ai_auto_reply_email_enabled),
@@ -476,9 +500,261 @@ function SlaRow({
   );
 }
 
+// ─── SMS Phone Preview ────────────────────────────────────────────────────────
+
+function SmsPhonePreview({
+  sender,
+  language,
+  testMessage,
+  triggers,
+}: {
+  sender: string;
+  language: string;
+  testMessage: string;
+  triggers: { new_ticket: boolean; status_change: boolean; reply: boolean; resolved: boolean };
+}) {
+  const langLabel = { en: 'EN', fr: 'FR', ar: 'AR' }[language] ?? 'EN';
+
+  const MESSAGES: Record<string, { new_ticket: string; status_change: string; reply: string; resolved: string }> = {
+    en: {
+      new_ticket: `New ticket #1234 created: "Help with account"\nWe'll follow up shortly.`,
+      status_change: `Ticket #1234 status updated to "In Progress"`,
+      reply: `Agent replied to ticket #1234:\n"Thank you for your patience, we are working on it."`,
+      resolved: `Ticket #1234 has been resolved.\nThank you for your trust in ${sender || 'our support'}.`,
+    },
+    fr: {
+      new_ticket: `Nouveau ticket #1234 créé : "Aide avec le compte"\nNous vous suivrons sous peu.`,
+      status_change: `Statut du ticket #1234 mis à jour : "En cours"`,
+      reply: `Un agent a répondu au ticket #1234 :\n"Merci pour votre patience, nous travaillons sur le problème."`,
+      resolved: `Le ticket #1234 a été résolu.\nMerci de votre confiance envers ${sender || 'notre support'}.`,
+    },
+    ar: {
+      new_ticket: `تذكرة جديدة #1234: "مساعدة في الحساب"\nسنقوم بالمتابعة قريبًا.`,
+      status_change: `تم تحديث حالة التذكرة #1234 إلى "قيد المعالجة"`,
+      reply: `رد الوكيل على التذكرة #1234:\n"نشكرك على صبرك، نحن نعمل على حل المشكلة."`,
+      resolved: `تم حل التذكرة #1234.\nنشكرك على ثقتك في ${sender || 'دعمنا'}.`,
+    },
+  };
+
+  const msg = MESSAGES[language] ?? MESSAGES.en;
+
+  const sampleMessages = [
+    triggers.new_ticket && { from: 'system', text: msg.new_ticket },
+    triggers.status_change && { from: 'system', text: msg.status_change },
+    triggers.reply && { from: 'system', text: msg.reply },
+    triggers.resolved && { from: 'system', text: msg.resolved },
+    testMessage && { from: 'test', text: testMessage },
+  ].filter(Boolean) as { from: string; text: string }[];
+
+  return (
+    <div className="relative mx-auto w-[240px]">
+      {/* Phone frame */}
+      <div className="relative rounded-[2.5rem] border-[3px] border-black bg-background shadow-2xl overflow-hidden">
+        {/* Notch */}
+        <div className="relative flex items-center justify-center pt-3 pb-2">
+          <div className="h-5 w-28 rounded-full bg-black flex items-center justify-center gap-2 px-3">
+            <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
+            <div className="h-1 w-16 rounded-full bg-white/40" />
+          </div>
+        </div>
+
+        {/* Status bar */}
+        <div className="flex items-center justify-between px-6 pb-1 text-[10px] font-medium text-muted-foreground">
+          <span>9:41</span>
+          <div className="flex items-center gap-1">
+            <div className="h-2.5 w-4 rounded-sm border border-muted-foreground/40 relative">
+              <div className="absolute inset-0.5 rounded-sm bg-muted-foreground/40" />
+            </div>
+          </div>
+        </div>
+
+        {/* Header */}
+        <div className="border-y border-border/40 bg-muted/30 px-4 py-2 text-center">
+          <p className="text-xs font-semibold text-foreground">{sender || 'L2T'}</p>
+          <p className="text-[10px] text-muted-foreground">SMS Notifications <span className="ml-1 rounded bg-muted-foreground/10 px-1 py-0.5 font-mono text-[8px]">{langLabel}</span></p>
+        </div>
+
+        {/* Messages */}
+        <div className="h-[140px] space-y-2 overflow-y-auto bg-gradient-to-b from-background to-muted/10 p-2.5">
+          {sampleMessages.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center">
+                <Smartphone className="mx-auto h-8 w-8 text-muted-foreground/30" />
+                <p className="mt-2 text-xs text-muted-foreground/50">Enable triggers or type a test message</p>
+              </div>
+            </div>
+          ) : (
+            sampleMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.from === 'test' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm ${
+                    msg.from === 'test'
+                      ? 'rounded-br-md bg-primary text-primary-foreground'
+                      : msg.text?.includes('✅')
+                      ? 'rounded-bl-md bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : msg.text?.includes('🔄')
+                      ? 'rounded-bl-md bg-amber-50 text-amber-800 border border-amber-200'
+                      : msg.text?.includes('💬')
+                      ? 'rounded-bl-md bg-blue-50 text-blue-800 border border-blue-200'
+                      : 'rounded-bl-md bg-muted text-foreground border border-border/50'
+                  }`}
+                >
+                  {msg.text}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Chat input bar */}
+        <div className="border-t border-border/40 bg-muted/20 px-2 py-1.5">
+          <div className="flex items-center gap-1.5 rounded-xl bg-muted/60 border border-border/40 px-3 py-2">
+            <div className="h-3 w-3 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
+              <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+            </div>
+            <div className="h-2.5 flex-1 rounded bg-muted-foreground/10" />
+            <div className="h-4 w-4 rounded-md bg-primary/20 flex items-center justify-center">
+              <div className="h-2 w-2 rotate-45 border-t-2 border-r-2 border-primary/60" />
+            </div>
+          </div>
+        </div>
+
+        {/* Keyboard */}
+        <div className="bg-muted/30 px-1.5 pb-2 pt-1">
+          <div className="grid grid-cols-10 gap-1">
+            {[
+              '1','2','3','4','5','6','7','8','9','0',
+              'q','w','e','r','t','y','u','i','o','p',
+              'a','s','d','f','g','h','j','k','l','',
+              '⇧','z','x','c','v','b','n','m','⌫','',
+            ].map((key, i) => (
+              <div
+                key={i}
+                className={`flex items-center justify-center rounded-md text-[9px] font-medium ${
+                  key === ''
+                    ? ''
+                    : key === '⇧' || key === '⌫'
+                    ? 'bg-muted-foreground/15 text-muted-foreground col-span-1.5 h-7'
+                    : 'bg-background text-foreground/80 border border-border/40 h-7 shadow-sm'
+                } ${key === '' ? '' : 'col-span-1'}`}
+              >
+                {key}
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 flex justify-center">
+            <div className="h-6 w-20 rounded-md bg-muted-foreground/15 flex items-center justify-center text-[9px] font-medium text-muted-foreground">
+              space
+            </div>
+          </div>
+        </div>
+
+        {/* Home indicator */}
+        <div className="flex justify-center pb-2">
+          <div className="h-1 w-24 rounded-full bg-muted-foreground/30" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Email Preview ────────────────────────────────────────────────────────────
+
+function EmailPreview({
+  senderName,
+  senderEmail,
+  triggers,
+}: {
+  senderName: string;
+  senderEmail: string;
+  triggers: { new_ticket: boolean; status_change: boolean; assigned: boolean; overdue: boolean; resolved: boolean };
+}) {
+  return (
+    <div className="w-full max-w-[380px]">
+      {/* Email client window frame */}
+      <div className="rounded-xl border border-border/60 bg-background shadow-2xl overflow-hidden">
+        {/* Window title bar */}
+        <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-4 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+            <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+            <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+          </div>
+          <div className="flex-1 text-center">
+            <span className="rounded-md bg-muted/60 px-3 py-0.5 text-[10px] font-medium text-muted-foreground">Mail Client</span>
+          </div>
+          <div className="w-10" />
+        </div>
+
+        {/* Mailbox toolbar */}
+        <div className="flex items-center gap-1 border-b border-border/40 bg-muted/10 px-3 py-1.5">
+          {['Inbox', 'Sent', 'Drafts'].map((label) => (
+            <span key={label} className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${label === 'Inbox' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>
+              {label}
+            </span>
+          ))}
+          <div className="flex-1" />
+          <div className="h-3 w-3 rounded border border-muted-foreground/30 flex items-center justify-center">
+            <div className="text-[6px] text-muted-foreground/50">+</div>
+          </div>
+        </div>
+
+        {/* Email list sidebar */}
+        <div className="flex">
+          {/* Email list */}
+          <div className="w-2/5 border-r border-border/30">
+            {[
+              triggers.new_ticket && { subject: 'New Ticket #1234', snippet: 'A new ticket has been created...', time: '2m ago', active: true },
+              triggers.status_change && { subject: 'Status Update #1234', snippet: 'Ticket status changed to...', time: '15m ago', active: false },
+              triggers.assigned && { subject: 'Ticket Assigned #1234', snippet: 'You have been assigned to...', time: '1h ago', active: false },
+              triggers.overdue && { subject: 'SLA Alert #1234', snippet: 'Ticket is approaching SLA...', time: '2h ago', active: false },
+              triggers.resolved && { subject: 'Ticket Resolved #1234', snippet: 'Ticket has been resolved...', time: '3h ago', active: false },
+            ].filter(Boolean).slice(0, 4).map((item: any, i: number) => (
+              <div key={i} className={`border-b border-border/20 px-2.5 py-2 ${item.active ? 'bg-primary/5 border-l-2 border-l-primary' : ''}`}>
+                <p className="truncate text-[11px] font-medium text-foreground">{item.subject}</p>
+                <p className="truncate text-[9px] text-muted-foreground">{item.snippet}</p>
+                <p className="text-[8px] text-muted-foreground/50">{item.time}</p>
+              </div>
+            ))}
+            {!triggers.new_ticket && !triggers.status_change && !triggers.assigned && !triggers.overdue && !triggers.resolved && (
+              <div className="flex items-center justify-center h-20">
+                <p className="text-[10px] text-muted-foreground/40">Enable triggers</p>
+              </div>
+            )}
+          </div>
+
+          {/* Email detail */}
+          <div className="w-3/5 p-3">
+            <div className="space-y-2">
+              <div className="h-2 w-3/4 rounded bg-muted-foreground/10" />
+              <div className="flex gap-2">
+                <div className="h-2 w-1/4 rounded bg-muted-foreground/10" />
+                <div className="h-2 w-1/2 rounded bg-muted-foreground/10" />
+              </div>
+              <div className="pt-2 space-y-1.5">
+                <div className="h-1.5 w-full rounded bg-muted-foreground/10" />
+                <div className="h-1.5 w-5/6 rounded bg-muted-foreground/10" />
+                <div className="h-1.5 w-4/6 rounded bg-muted-foreground/10" />
+                <div className="h-1.5 w-3/4 rounded bg-muted-foreground/10" />
+              </div>
+              <div className="mt-3 flex items-center gap-2 border-t border-border/20 pt-2">
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[8px] font-medium text-emerald-700">
+                  {senderName || 'Support'}
+                </span>
+                <span className="text-[8px] text-muted-foreground/50">{senderEmail || 'support@example.com'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -486,6 +762,10 @@ export function SettingsPage() {
   const [settings, setSettings] = useState<AdvancedSettings>({ ...DEFAULT_ADVANCED_SETTINGS });
   const [voiceAgentConfig, setVoiceAgentConfig] = useState<VoiceAgentConfig | null>(null);
   const [savingSection, setSavingSection] = useState<SettingsSection | null>(null);
+  const [smsTestPhone, setSmsTestPhone] = useState('');
+  const [smsTestMessage, setSmsTestMessage] = useState('');
+  const [smsTestSending, setSmsTestSending] = useState(false);
+  const [smsTestResult, setSmsTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const hasLocalToken = !!getToken();
   const is401 = (error: unknown) => error instanceof ApiError && error.status === 401;
 
@@ -527,11 +807,10 @@ export function SettingsPage() {
     if (settings.password_complexity) score++;
     if (settings.require_email_verification) score++;
     if (settings.two_factor_auth) score++;
-    if (settings.require_admin_profile_completion) score++;
     if (score >= 4) return { label: 'Strong', variant: 'success' as const };
     if (score >= 2) return { label: 'Standard', variant: 'default' as const };
     return { label: 'Basic', variant: 'warn' as const };
-  }, [settings.min_password_length, settings.password_complexity, settings.require_email_verification, settings.require_admin_profile_completion, settings.two_factor_auth]);
+  }, [settings.min_password_length, settings.password_complexity, settings.require_email_verification, settings.two_factor_auth]);
 
   const updateSetting = <K extends keyof AdvancedSettings>(key: K, value: AdvancedSettings[K]) =>
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -546,13 +825,23 @@ export function SettingsPage() {
       if (section === 'general') return settingsApi.updateGeneral({ app_name: settings.app_name, support_email: settings.support_email, description: settings.description, locale: settings.locale, timezone: settings.timezone });
       if (section === 'branding') return settingsApi.updateBranding({ primary_color: settings.primary_color, secondary_color: settings.secondary_color, theme_mode: settings.theme_mode, ticket_label: settings.ticket_label });
       if (section === 'tickets') return settingsApi.updateTickets({ auto_assignment: settings.auto_assignment, auto_assignment_method: settings.auto_assignment_method, allow_client_close: settings.allow_client_close, sla_critical_hours: settings.sla_critical_hours, sla_high_hours: settings.sla_high_hours, sla_medium_hours: settings.sla_medium_hours, sla_low_hours: settings.sla_low_hours });
-      if (section === 'security') return settingsApi.updateSecurity({ min_password_length: settings.min_password_length, session_timeout: settings.session_timeout, max_login_attempts: settings.max_login_attempts, password_complexity: settings.password_complexity, allow_registration: settings.allow_registration, require_email_verification: settings.require_email_verification, two_factor_auth: settings.two_factor_auth, require_admin_profile_completion: settings.require_admin_profile_completion });
+      if (section === 'security') return settingsApi.updateSecurity({ min_password_length: settings.min_password_length, session_timeout: settings.session_timeout, max_login_attempts: settings.max_login_attempts, password_complexity: settings.password_complexity, allow_registration: settings.allow_registration, require_email_verification: settings.require_email_verification, two_factor_auth: settings.two_factor_auth });
       if (section === 'automation') return settingsApi.updateAutomation({ ai_auto_reply_chat_enabled: settings.ai_auto_reply_chat_enabled, ai_auto_reply_whatsapp_enabled: settings.ai_auto_reply_whatsapp_enabled, ai_auto_reply_email_enabled: settings.ai_auto_reply_email_enabled, conversation_sla_autopilot_enabled: settings.conversation_sla_autopilot_enabled, conversation_sla_auto_escalate_minutes_before_breach: settings.conversation_sla_auto_escalate_minutes_before_breach, conversation_sla_auto_assign_enabled: settings.conversation_sla_auto_assign_enabled, conversation_sla_auto_assign_minutes_before_breach: settings.conversation_sla_auto_assign_minutes_before_breach, conversation_sla_autopilot_respect_snooze: settings.conversation_sla_autopilot_respect_snooze });
-      return settingsApi.updateNotifications({ mail_mode: settings.mail_mode, gmail_from_email: settings.gmail_from_email, gmail_client_id: settings.gmail_client_id, gmail_client_secret: settings.gmail_client_secret, gmail_refresh_token: settings.gmail_refresh_token, smtp_from_name: settings.smtp_from_name, smtp_from_email: settings.smtp_from_email, smtp_host: settings.smtp_host, smtp_port: settings.smtp_port, smtp_encryption: settings.smtp_encryption, smtp_username: settings.smtp_username, smtp_password: settings.smtp_password, notify_new_ticket: settings.notify_new_ticket, notify_status_change: settings.notify_status_change, notify_assigned: settings.notify_assigned, notify_overdue: settings.notify_overdue, notify_resolved: settings.notify_resolved });
+      return settingsApi.updateNotifications({ mail_mode: settings.mail_mode, gmail_from_email: settings.gmail_from_email, gmail_client_id: settings.gmail_client_id, gmail_client_secret: settings.gmail_client_secret, gmail_refresh_token: settings.gmail_refresh_token, smtp_from_name: settings.smtp_from_name, smtp_from_email: settings.smtp_from_email, smtp_host: settings.smtp_host, smtp_port: settings.smtp_port, smtp_encryption: settings.smtp_encryption, smtp_username: settings.smtp_username, smtp_password: settings.smtp_password, notify_new_ticket: settings.notify_new_ticket, notify_status_change: settings.notify_status_change, notify_assigned: settings.notify_assigned, notify_overdue: settings.notify_overdue, notify_resolved: settings.notify_resolved, sms_api_url: settings.sms_api_url, sms_api_key: settings.sms_api_key, sms_sender: settings.sms_sender, sms_language: settings.sms_language, sms_notify_new_ticket: settings.sms_notify_new_ticket, sms_notify_status_change: settings.sms_notify_status_change, sms_notify_reply: settings.sms_notify_reply, sms_notify_resolved: settings.sms_notify_resolved });
     },
     onMutate: (section) => setSavingSection(section),
     onSuccess: (saved) => {
-      setSettings(normalizeAdvancedSettings(saved));
+      setSettings((prev) => ({
+        ...normalizeAdvancedSettings(saved),
+        sms_api_url: prev.sms_api_url,
+        sms_api_key: prev.sms_api_key,
+        sms_sender: prev.sms_sender,
+        sms_language: prev.sms_language,
+        sms_notify_new_ticket: prev.sms_notify_new_ticket,
+        sms_notify_status_change: prev.sms_notify_status_change,
+        sms_notify_reply: prev.sms_notify_reply,
+        sms_notify_resolved: prev.sms_notify_resolved,
+      }));
       void adminSettingsQ.refetch();
       toast({ title: 'Settings saved', description: 'Persisted to backend configuration.' });
     },
@@ -571,6 +860,22 @@ export function SettingsPage() {
     }
     setSettings({ ...DEFAULT_ADVANCED_SETTINGS });
     toast({ title: 'Settings reset', description: 'No persisted settings were available to reload.' });
+  };
+
+  const handleSendTestSms = async () => {
+    setSmsTestSending(true);
+    setSmsTestResult(null);
+    try {
+      const result = await apiClient<{ success: boolean; message: string }>('/settings/sms/test', {
+        method: 'POST',
+        body: JSON.stringify({ phone: smsTestPhone, message: smsTestMessage, language: settings.sms_language }),
+      });
+      setSmsTestResult(result);
+    } catch (error) {
+      setSmsTestResult({ success: false, message: normalizeError(error) });
+    } finally {
+      setSmsTestSending(false);
+    }
   };
 
   const clearRuntimeOverrides = () => {
@@ -621,15 +926,15 @@ export function SettingsPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Advanced Settings</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('common.settings')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            System configuration, branding, security, and automation controls.
+            {t('admin.notificationsDesc')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StatPill label="Overrides" value={runtimeOverrideCount} />
-          <StatPill label="Alerts" value={`${enabledNotifications}/5`} variant={enabledNotifications > 0 ? 'success' : 'warn'} />
-          <StatPill label="Security" value={securityStrength.label} variant={securityStrength.variant} />
+          <StatPill label={t('admin.overrides')} value={runtimeOverrideCount} />
+          <StatPill label={t('admin.alerts')} value={`${enabledNotifications}/5`} variant={enabledNotifications > 0 ? 'success' : 'warn'} />
+          <StatPill label={t('admin.securityTab')} value={securityStrength.label} variant={securityStrength.variant} />
         </div>
       </div>
 
@@ -651,13 +956,13 @@ export function SettingsPage() {
       <Tabs defaultValue="general" className="space-y-5">
         <TabsList className="flex h-auto w-full flex-wrap gap-1 rounded-xl border bg-muted/50 p-1">
           {[
-            { value: 'general', icon: Globe2, label: 'General' },
-            { value: 'branding', icon: Palette, label: 'Branding' },
-            { value: 'tickets', icon: Ticket, label: 'Tickets' },
-            { value: 'security', icon: ShieldCheck, label: 'Security' },
-            { value: 'notifications', icon: Bell, label: 'Notifications' },
-            { value: 'automation', icon: Bot, label: 'Automation' },
-            { value: 'system', icon: Settings2, label: 'System' },
+            { value: 'general', icon: Globe2, label: t('admin.generalTab') },
+            { value: 'branding', icon: Palette, label: t('admin.brandingTab') },
+            { value: 'tickets', icon: Ticket, label: t('admin.ticketsTab') },
+            { value: 'security', icon: ShieldCheck, label: t('admin.securityTab') },
+            { value: 'notifications', icon: Bell, label: t('admin.notificationsTab') },
+            { value: 'automation', icon: Bot, label: t('admin.automationTab') },
+            { value: 'system', icon: Settings2, label: t('admin.systemTab') },
           ].map(({ value, icon: Icon, label }) => (
             <TabsTrigger key={value} value={value} className="flex-1 gap-1.5 rounded-lg text-xs font-medium">
               <Icon className="h-3.5 w-3.5" />
@@ -669,8 +974,8 @@ export function SettingsPage() {
         {/* ───────── GENERAL ───────── */}
         <TabsContent value="general" className="space-y-4">
           <SectionCard
-            title="General Information"
-            description="Basic platform identity and regional defaults."
+            title={t('admin.generalInformation')}
+            description={t('admin.generalDesc')}
             icon={Globe2}
             footer={
               <SaveButton
@@ -683,22 +988,22 @@ export function SettingsPage() {
             }
           >
             <FieldGroup className="md:grid-cols-2">
-              <Field label="Application Name">
-                <Input value={settings.app_name} onChange={(e) => updateSetting('app_name', e.target.value)} placeholder="AI Support Agent" />
+              <Field label={t('admin.applicationName')}>
+                <Input value={settings.app_name} onChange={(e) => updateSetting('app_name', e.target.value)} placeholder={t('admin.appNamePlaceholder')} />
               </Field>
-              <Field label="Support Email">
-                <Input type="email" value={settings.support_email} onChange={(e) => updateSetting('support_email', e.target.value)} placeholder="support@example.com" />
+              <Field label={t('admin.supportEmail')}>
+                <Input type="email" value={settings.support_email} onChange={(e) => updateSetting('support_email', e.target.value)} placeholder={t('admin.supportEmailPlaceholder')} />
               </Field>
-              <Field label="Description" span="full">
-                <Textarea rows={3} value={settings.description} onChange={(e) => updateSetting('description', e.target.value)} placeholder="Platform summary shown across admin surfaces" className="resize-none" />
+              <Field label={t('admin.description')} span="full">
+                <Textarea rows={3} value={settings.description} onChange={(e) => updateSetting('description', e.target.value)} placeholder={t('admin.descriptionPlaceholder')} className="resize-none" />
               </Field>
-              <Field label="Locale">
+              <Field label={t('admin.locale')}>
                 <Select value={settings.locale} onValueChange={(v) => updateSetting('locale', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="ar">Arabic</SelectItem>
+                    <SelectItem value="en">{t('admin.english')}</SelectItem>
+                    <SelectItem value="fr">{t('admin.french')}</SelectItem>
+                    <SelectItem value="ar">{t('common.arabic')}</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
@@ -720,8 +1025,8 @@ export function SettingsPage() {
         {/* ───────── BRANDING ───────── */}
         <TabsContent value="branding" className="space-y-4">
           <SectionCard
-            title="Branding &amp; Theme"
-            description="Customize colors, themes, and terminology."
+            title={t('admin.brandingTheme')}
+            description={t('admin.brandingDesc')}
             icon={Palette}
             footer={
               <SaveButton
@@ -766,8 +1071,8 @@ export function SettingsPage() {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Ticket Label" hint="Used throughout the UI in place of 'Ticket'.">
-                <Input value={settings.ticket_label} onChange={(e) => updateSetting('ticket_label', e.target.value)} placeholder="Ticket" />
+              <Field label={t('admin.ticketLabel')} hint="Used throughout the UI in place of 'Ticket'.">
+                <Input value={settings.ticket_label} onChange={(e) => updateSetting('ticket_label', e.target.value)} placeholder={t('admin.ticketPlaceholder')} />
               </Field>
             </FieldGroup>
 
@@ -790,8 +1095,8 @@ export function SettingsPage() {
         {/* ───────── TICKETS ───────── */}
         <TabsContent value="tickets" className="space-y-4">
           <SectionCard
-            title="Ticket Rules"
-            description="Assignment behavior and SLA enforcement."
+            title={t('admin.ticketRules')}
+            description={t('admin.ticketsDesc')}
             icon={Ticket}
             footer={
               <SaveButton
@@ -807,8 +1112,8 @@ export function SettingsPage() {
               {/* Assignment toggles */}
               <div className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assignment</p>
-                <ToggleRow id="auto-assignment" label="Auto assignment" description="Automatically assign new tickets" checked={settings.auto_assignment} onCheckedChange={(v) => updateSetting('auto_assignment', v)} />
-                <ToggleRow id="allow-client-close" label="Client can close ticket" description="Allow end-users to close their own tickets" checked={settings.allow_client_close} onCheckedChange={(v) => updateSetting('allow_client_close', v)} />
+                <ToggleRow id="auto-assignment" label={t('admin.autoAssignment')} description={t('admin.autoAssignmentDesc')} checked={settings.auto_assignment} onCheckedChange={(v) => updateSetting('auto_assignment', v)} />
+                <ToggleRow id="allow-client-close" label={t('admin.clientCanClose')} description={t('admin.clientCanCloseDesc')} checked={settings.allow_client_close} onCheckedChange={(v) => updateSetting('allow_client_close', v)} />
                 <Field label="Assignment Method">
                   <Select value={settings.auto_assignment_method} onValueChange={(v) => updateSetting('auto_assignment_method', v as AutoAssignmentMethod)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -838,14 +1143,14 @@ export function SettingsPage() {
         {/* ───────── SECURITY ───────── */}
         <TabsContent value="security" className="space-y-4">
           <SectionCard
-            title="Security &amp; Access Policy"
-            description="Password rules, session limits, and authentication controls."
+            title={t('admin.securityAccessPolicy')}
+            description={t('admin.securityDesc')}
             icon={Lock}
             footer={
               <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  Current strength:&nbsp;
+                  {t('admin.currentStrength')}&nbsp;
                   <span className={securityStrength.variant === 'success' ? 'text-emerald-600 font-semibold' : securityStrength.variant === 'warn' ? 'text-amber-600 font-semibold' : 'font-semibold'}>
                     {securityStrength.label}
                   </span>
@@ -855,29 +1160,28 @@ export function SettingsPage() {
                   currentlySaving={savingSection}
                   isPending={persistSettingsMut.isPending}
                   onClick={() => saveAdvanced('security')}
-                  label="Save Security"
+                  label={t('admin.saveSecurity')}
                 />
               </div>
             }
           >
             <FieldGroup className="md:grid-cols-3">
-              <Field label="Min Password Length">
-                <Input type="number" min={6} max={64} value={settings.min_password_length} onChange={(e) => updateSetting('min_password_length', coerceNumber(e.target.value, settings.min_password_length, 6, 64))} />
-              </Field>
-              <Field label="Session Timeout (min)">
-                <Input type="number" min={5} max={1440} value={settings.session_timeout} onChange={(e) => updateSetting('session_timeout', coerceNumber(e.target.value, settings.session_timeout, 5, 1440))} />
-              </Field>
-              <Field label="Max Login Attempts">
-                <Input type="number" min={3} max={50} value={settings.max_login_attempts} onChange={(e) => updateSetting('max_login_attempts', coerceNumber(e.target.value, settings.max_login_attempts, 3, 50))} />
-              </Field>
+                <Field label={t('admin.minPasswordLength')}>
+                  <Input type="number" min={6} max={64} value={settings.min_password_length} onChange={(e) => updateSetting('min_password_length', coerceNumber(e.target.value, settings.min_password_length, 6, 64))} />
+                </Field>
+                <Field label={t('admin.sessionTimeout')}>
+                  <Input type="number" min={5} max={1440} value={settings.session_timeout} onChange={(e) => updateSetting('session_timeout', coerceNumber(e.target.value, settings.session_timeout, 5, 1440))} />
+                </Field>
+                <Field label={t('admin.maxLoginAttempts')}>
+                  <Input type="number" min={3} max={50} value={settings.max_login_attempts} onChange={(e) => updateSetting('max_login_attempts', coerceNumber(e.target.value, settings.max_login_attempts, 3, 50))} />
+                </Field>
             </FieldGroup>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <ToggleRow id="password-complexity" label="Enforce password complexity" description="Require uppercase, numbers, and symbols" checked={settings.password_complexity} onCheckedChange={(v) => updateSetting('password_complexity', v)} />
-              <ToggleRow id="allow-registration" label="Allow client registration" description="Let new users self-register" checked={settings.allow_registration} onCheckedChange={(v) => updateSetting('allow_registration', v)} />
-              <ToggleRow id="require-email-verification" label="Require email verification" description="Email must be confirmed before access" checked={settings.require_email_verification} onCheckedChange={(v) => updateSetting('require_email_verification', v)} />
-              <ToggleRow id="two-factor-auth" label="Enable optional 2FA" description="Allow agents to set up two-factor auth" checked={settings.two_factor_auth} onCheckedChange={(v) => updateSetting('two_factor_auth', v)} />
-              <ToggleRow id="require-admin-profile" label="Require admin profile completion" description="Enforce profile fields before access" checked={settings.require_admin_profile_completion} onCheckedChange={(v) => updateSetting('require_admin_profile_completion', v)} />
+              <ToggleRow id="password-complexity" label={t('admin.passwordComplexity')} description={t('admin.passwordComplexityDesc')} checked={settings.password_complexity} onCheckedChange={(v) => updateSetting('password_complexity', v)} />
+              <ToggleRow id="allow-registration" label={t('admin.allowClientRegistration')} description={t('admin.allowClientRegistrationDesc')} checked={settings.allow_registration} onCheckedChange={(v) => updateSetting('allow_registration', v)} />
+              <ToggleRow id="require-email-verification" label={t('admin.emailVerification')} description={t('admin.emailVerificationDesc')} checked={settings.require_email_verification} onCheckedChange={(v) => updateSetting('require_email_verification', v)} />
+              <ToggleRow id="two-factor-auth" label={t('admin.twoFa')} description={t('admin.twoFaDesc')} checked={settings.two_factor_auth} onCheckedChange={(v) => updateSetting('two_factor_auth', v)} />
             </div>
           </SectionCard>
         </TabsContent>
@@ -885,8 +1189,8 @@ export function SettingsPage() {
         {/* ───────── NOTIFICATIONS ───────── */}
         <TabsContent value="notifications" className="space-y-4">
           <SectionCard
-            title="Email &amp; Notifications"
-            description="Configure outbound mail and event-based notifications."
+            title={t('admin.emailNotifications')}
+            description={t('admin.notificationsDesc')}
             icon={Mail}
             footer={
               <SaveButton
@@ -894,85 +1198,254 @@ export function SettingsPage() {
                 currentlySaving={savingSection}
                 isPending={persistSettingsMut.isPending}
                 onClick={() => saveAdvanced('notifications')}
-                label="Save Notifications"
+                label={t('admin.saveNotifications')}
               />
             }
           >
-            {/* Mail mode switch */}
-            <div className="flex items-center gap-3">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Mail Mode</Label>
-              <div className="flex rounded-lg border border-border/60 overflow-hidden">
-                {(['gmail', 'smtp'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => updateSetting('mail_mode', mode)}
-                    className={`px-4 py-1.5 text-xs font-medium transition-colors ${settings.mail_mode === mode ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:bg-muted'}`}
-                  >
-                    {mode === 'gmail' ? 'Gmail OAuth' : 'SMTP'}
-                  </button>
-                ))}
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* ── Left: Tabs (Config / Triggers) ── */}
+              <Tabs defaultValue="config" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 rounded-lg">
+                  <TabsTrigger value="config" className="text-xs">{t('admin.emailConfigTab')}</TabsTrigger>
+                  <TabsTrigger value="triggers" className="text-xs">{t('admin.emailTriggersTab')}</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="config" className="mt-4 space-y-4">
+                  {/* Mail mode switch */}
+                  <div className="flex items-center gap-3">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground shrink-0">{t('admin.mailMode')}</Label>
+                    <div className="flex rounded-lg border border-border/60 overflow-hidden">
+                      {(['gmail', 'smtp'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => updateSetting('mail_mode', mode)}
+                          className={`px-4 py-1.5 text-xs font-medium transition-colors ${settings.mail_mode === mode ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:bg-muted'}`}
+                        >
+                          {mode === 'gmail' ? t('admin.mailGmail') : t('admin.mailSmtp')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {settings.mail_mode === 'gmail' ? (
+                    <FieldGroup className="md:grid-cols-1">
+                      <Field label={t('admin.gmailSenderEmail')}>
+                        <Input value={settings.gmail_from_email} onChange={(e) => updateSetting('gmail_from_email', e.target.value)} placeholder="support@gmail.com" />
+                      </Field>
+                      <Field label={t('admin.senderName')}>
+                        <Input value={settings.smtp_from_name} onChange={(e) => updateSetting('smtp_from_name', e.target.value)} placeholder={t('admin.senderPlaceholder')} />
+                      </Field>
+                      <Field label="Gmail Client ID">
+                        <Input value={settings.gmail_client_id} onChange={(e) => updateSetting('gmail_client_id', e.target.value)} placeholder={t('admin.googleClientIdPlaceholder')} />
+                      </Field>
+                      <Field label="Gmail Client Secret">
+                        <Input type="password" value={settings.gmail_client_secret} onChange={(e) => updateSetting('gmail_client_secret', e.target.value)} placeholder={t('admin.clientSecretPlaceholder')} />
+                      </Field>
+                      <Field label="Gmail Refresh Token" span="full">
+                        <Input type="password" value={settings.gmail_refresh_token} onChange={(e) => updateSetting('gmail_refresh_token', e.target.value)} placeholder={t('admin.refreshTokenPlaceholder')} />
+                      </Field>
+                    </FieldGroup>
+                  ) : (
+                    <FieldGroup className="md:grid-cols-1">
+                      <Field label={t('admin.gmailSenderEmail')}>
+                        <Input value={settings.smtp_from_email} onChange={(e) => updateSetting('smtp_from_email', e.target.value)} placeholder={t('admin.supportEmailPlaceholder')} />
+                      </Field>
+                      <Field label={t('admin.senderName')}>
+                        <Input value={settings.smtp_from_name} onChange={(e) => updateSetting('smtp_from_name', e.target.value)} />
+                      </Field>
+                      <Field label={t('admin.smtpHost')}>
+                        <Input value={settings.smtp_host} onChange={(e) => updateSetting('smtp_host', e.target.value)} />
+                      </Field>
+                      <Field label={t('admin.smtpPort')}>
+                        <Input type="number" min={1} max={65535} value={settings.smtp_port} onChange={(e) => updateSetting('smtp_port', coerceNumber(e.target.value, settings.smtp_port, 1, 65535))} />
+                      </Field>
+                      <Field label={t('admin.smtpEncryption')}>
+                        <Select value={settings.smtp_encryption} onValueChange={(v) => updateSetting('smtp_encryption', v as SmtpEncryption)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="tls">TLS</SelectItem>
+                            <SelectItem value="ssl">SSL</SelectItem>
+                            <SelectItem value="none">{t('admin.noEncryption') || 'None'}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label={t('admin.smtpUsername')}>
+                        <Input value={settings.smtp_username} onChange={(e) => updateSetting('smtp_username', e.target.value)} />
+                      </Field>
+                      <Field label={t('admin.smtpPassword')} span="full">
+                        <Input type="password" value={settings.smtp_password} onChange={(e) => updateSetting('smtp_password', e.target.value)} placeholder={t('admin.refreshTokenNote')} />
+                      </Field>
+                    </FieldGroup>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="triggers" className="mt-4 space-y-2.5">
+                  <ToggleRow id="notify-new-ticket" label={t('admin.newTickets')} checked={settings.notify_new_ticket} onCheckedChange={(v) => updateSetting('notify_new_ticket', v)} />
+                  <ToggleRow id="notify-status-change" label={t('admin.statusChanges')} checked={settings.notify_status_change} onCheckedChange={(v) => updateSetting('notify_status_change', v)} />
+                  <ToggleRow id="notify-assigned" label={t('admin.assignment')} checked={settings.notify_assigned} onCheckedChange={(v) => updateSetting('notify_assigned', v)} />
+                  <ToggleRow id="notify-overdue" label={t('admin.overdueSla')} checked={settings.notify_overdue} onCheckedChange={(v) => updateSetting('notify_overdue', v)} />
+                  <ToggleRow id="notify-resolved" label={t('admin.resolution')} checked={settings.notify_resolved} onCheckedChange={(v) => updateSetting('notify_resolved', v)} />
+                </TabsContent>
+              </Tabs>
+
+              {/* ── Right: Email Preview ── */}
+              <div className="flex items-start justify-center lg:sticky lg:top-6">
+                <EmailPreview
+                  senderName={settings.smtp_from_name || 'Support Team'}
+                  senderEmail={settings.mail_mode === 'gmail' ? settings.gmail_from_email : settings.smtp_from_email}
+                  triggers={{
+                    new_ticket: settings.notify_new_ticket,
+                    status_change: settings.notify_status_change,
+                    assigned: settings.notify_assigned,
+                    overdue: settings.notify_overdue,
+                    resolved: settings.notify_resolved,
+                  }}
+                />
               </div>
             </div>
+          </SectionCard>
 
-            {settings.mail_mode === 'gmail' ? (
-              <FieldGroup className="md:grid-cols-2">
-                <Field label="Gmail Sender Email">
-                  <Input value={settings.gmail_from_email} onChange={(e) => updateSetting('gmail_from_email', e.target.value)} placeholder="support@gmail.com" />
-                </Field>
-                <Field label="Sender Name">
-                  <Input value={settings.smtp_from_name} onChange={(e) => updateSetting('smtp_from_name', e.target.value)} placeholder="Support Team" />
-                </Field>
-                <Field label="Gmail Client ID">
-                  <Input value={settings.gmail_client_id} onChange={(e) => updateSetting('gmail_client_id', e.target.value)} placeholder="xxxx.apps.googleusercontent.com" />
-                </Field>
-                <Field label="Gmail Client Secret">
-                  <Input type="password" value={settings.gmail_client_secret} onChange={(e) => updateSetting('gmail_client_secret', e.target.value)} placeholder="Client secret" />
-                </Field>
-                <Field label="Gmail Refresh Token" span="full">
-                  <Input type="password" value={settings.gmail_refresh_token} onChange={(e) => updateSetting('gmail_refresh_token', e.target.value)} placeholder="Refresh token" />
-                </Field>
-              </FieldGroup>
-            ) : (
-              <FieldGroup className="md:grid-cols-3">
-                <Field label="Sender Email">
-                  <Input value={settings.smtp_from_email} onChange={(e) => updateSetting('smtp_from_email', e.target.value)} placeholder="support@example.com" />
-                </Field>
-                <Field label="Sender Name">
-                  <Input value={settings.smtp_from_name} onChange={(e) => updateSetting('smtp_from_name', e.target.value)} />
-                </Field>
-                <Field label="SMTP Host">
-                  <Input value={settings.smtp_host} onChange={(e) => updateSetting('smtp_host', e.target.value)} />
-                </Field>
-                <Field label="SMTP Port">
-                  <Input type="number" min={1} max={65535} value={settings.smtp_port} onChange={(e) => updateSetting('smtp_port', coerceNumber(e.target.value, settings.smtp_port, 1, 65535))} />
-                </Field>
-                <Field label="Encryption">
-                  <Select value={settings.smtp_encryption} onValueChange={(v) => updateSetting('smtp_encryption', v as SmtpEncryption)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="tls">TLS</SelectItem>
-                      <SelectItem value="ssl">SSL</SelectItem>
-                      <SelectItem value="none">None</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="SMTP Username">
-                  <Input value={settings.smtp_username} onChange={(e) => updateSetting('smtp_username', e.target.value)} />
-                </Field>
-                <Field label="SMTP Password" span="full">
-                  <Input type="password" value={settings.smtp_password} onChange={(e) => updateSetting('smtp_password', e.target.value)} placeholder="Leave as-is unless rotating credentials" />
-                </Field>
-              </FieldGroup>
-            )}
+          {/* ── SMS Notifications ── */}
+          <SectionCard
+            title={t('admin.smsNotifications')}
+            description={t('admin.smsNotificationsDesc')}
+            icon={Smartphone}
+            footer={
+              <SaveButton
+                section="notifications"
+                currentlySaving={savingSection}
+                isPending={persistSettingsMut.isPending}
+                onClick={() => saveAdvanced('notifications')}
+                label={t('admin.saveSms')}
+              />
+            }
+          >
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* ── Left: Tabs (Config / Triggers / Test SMS) ── */}
+              <Tabs defaultValue="config" className="w-full">
+                <TabsList className="grid w-full grid-cols-3 rounded-lg">
+                  <TabsTrigger value="config" className="text-xs">{t('admin.smsConfigTab')}</TabsTrigger>
+                  <TabsTrigger value="triggers" className="text-xs">{t('admin.smsTriggersTab')}</TabsTrigger>
+                  <TabsTrigger value="test" className="text-xs">{t('admin.smsTestTab')}</TabsTrigger>
+                </TabsList>
 
-            <div className="border-t border-border/40 pt-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notification Triggers</p>
-              <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-3">
-                <ToggleRow id="notify-new-ticket" label="New tickets" checked={settings.notify_new_ticket} onCheckedChange={(v) => updateSetting('notify_new_ticket', v)} />
-                <ToggleRow id="notify-status-change" label="Status changes" checked={settings.notify_status_change} onCheckedChange={(v) => updateSetting('notify_status_change', v)} />
-                <ToggleRow id="notify-assigned" label="Assignment" checked={settings.notify_assigned} onCheckedChange={(v) => updateSetting('notify_assigned', v)} />
-                <ToggleRow id="notify-overdue" label="Overdue SLA" checked={settings.notify_overdue} onCheckedChange={(v) => updateSetting('notify_overdue', v)} />
-                <ToggleRow id="notify-resolved" label="Resolution" checked={settings.notify_resolved} onCheckedChange={(v) => updateSetting('notify_resolved', v)} />
+                <TabsContent value="config" className="mt-4 space-y-4">
+                  <FieldGroup className="md:grid-cols-1">
+                    <Field label={t('admin.smsApiUrl')}>
+                      <Input
+                        value={settings.sms_api_url}
+                        onChange={(e) => updateSetting('sms_api_url', e.target.value)}
+                        placeholder="https://mystudents.tunisiesms.tn/api/sms"
+                      />
+                    </Field>
+                    <Field label={t('admin.smsApiKey')}>
+                      <Input
+                        type="password"
+                        value={settings.sms_api_key}
+                        onChange={(e) => updateSetting('sms_api_key', e.target.value)}
+                        placeholder="Enter your SMS provider API key"
+                      />
+                    </Field>
+                    <Field label={t('admin.smsSender')} hint={t('admin.smsSenderHint')}>
+                      <Input
+                        value={settings.sms_sender}
+                        onChange={(e) => updateSetting('sms_sender', e.target.value.slice(0, 11))}
+                        placeholder="L2T"
+                        maxLength={11}
+                      />
+                    </Field>
+                  </FieldGroup>
+                </TabsContent>
+
+                <TabsContent value="triggers" className="mt-4 space-y-2.5">
+                  <ToggleRow
+                    id="sms-notify-new-ticket"
+                    label={t('admin.smsNewTicket')}
+                    description={t('admin.smsNewTicketDesc')}
+                    checked={settings.sms_notify_new_ticket}
+                    onCheckedChange={(v) => updateSetting('sms_notify_new_ticket', v)}
+                  />
+                  <ToggleRow
+                    id="sms-notify-status-change"
+                    label={t('admin.smsStatusChange')}
+                    description={t('admin.smsStatusChangeDesc')}
+                    checked={settings.sms_notify_status_change}
+                    onCheckedChange={(v) => updateSetting('sms_notify_status_change', v)}
+                  />
+                  <ToggleRow
+                    id="sms-notify-reply"
+                    label={t('admin.smsAdminReply')}
+                    description={t('admin.smsAdminReplyDesc')}
+                    checked={settings.sms_notify_reply}
+                    onCheckedChange={(v) => updateSetting('sms_notify_reply', v)}
+                  />
+                  <ToggleRow
+                    id="sms-notify-resolved"
+                    label={t('admin.smsResolved')}
+                    description={t('admin.smsResolvedDesc')}
+                    checked={settings.sms_notify_resolved}
+                    onCheckedChange={(v) => updateSetting('sms_notify_resolved', v)}
+                  />
+                </TabsContent>
+
+                <TabsContent value="test" className="mt-4 space-y-3">
+                  <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+                    <Field label={t('admin.smsTestPhone')} hint={t('admin.smsTestPhoneHint')}>
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 rounded-md border border-input bg-muted px-2.5 py-1.5 text-xs font-mono text-muted-foreground">+216</span>
+                        <Input
+                          value={smsTestPhone}
+                          onChange={(e) => setSmsTestPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                          placeholder="20123456"
+                          maxLength={8}
+                        />
+                      </div>
+                    </Field>
+                    <Field label={t('admin.smsTestMessage')} hint={`${smsTestMessage.length}/160 ${t('admin.characters')}`}>
+                      <Textarea
+                        rows={3}
+                        value={smsTestMessage}
+                        onChange={(e) => setSmsTestMessage(e.target.value.slice(0, 160))}
+                        placeholder={t('admin.smsTestTab') + '...'}
+                        className="resize-none"
+                      />
+                    </Field>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 w-full"
+                      onClick={handleSendTestSms}
+                      disabled={smsTestSending || !smsTestPhone || smsTestPhone.length < 8 || !smsTestMessage}
+                    >
+                      {smsTestSending ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin" />{t('admin.smsSending')}</>
+                      ) : (
+                        <><MessageSquare className="h-3.5 w-3.5" />{t('admin.smsTestSend')}</>
+                      )}
+                    </Button>
+                    {smsTestResult && (
+                      <div className={`flex items-center gap-2 text-xs ${smsTestResult.success ? 'text-emerald-600' : 'text-destructive'}`}>
+                        {smsTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                        {smsTestResult.message}
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              {/* ── Right: Mobile Preview ── */}
+              <div className="flex items-start justify-center lg:sticky lg:top-6">
+                <SmsPhonePreview
+                  sender={settings.sms_sender || 'L2T'}
+                  language={settings.sms_language}
+                  testMessage={smsTestMessage}
+                  triggers={{
+                    new_ticket: settings.sms_notify_new_ticket,
+                    status_change: settings.sms_notify_status_change,
+                    reply: settings.sms_notify_reply,
+                    resolved: settings.sms_notify_resolved,
+                  }}
+                />
               </div>
             </div>
           </SectionCard>
@@ -981,8 +1454,8 @@ export function SettingsPage() {
         {/* ───────── AUTOMATION ───────── */}
         <TabsContent value="automation" className="space-y-4">
           <SectionCard
-            title="AI Auto-Reply"
-            description="Enable automated AI responses per channel."
+            title={t('admin.aiAutoReply')}
+            description={t('admin.autoReplyDesc')}
             icon={Zap}
           >
             <div className="grid gap-2.5 md:grid-cols-3">
@@ -993,8 +1466,8 @@ export function SettingsPage() {
           </SectionCard>
 
           <SectionCard
-            title="SLA Autopilot"
-            description="Proactive escalation and assignment before SLA breach."
+            title={t('admin.slaAutopilot')}
+            description={t('admin.slaDesc')}
             icon={Bot}
             footer={
               <SaveButton
@@ -1033,7 +1506,7 @@ export function SettingsPage() {
         <TabsContent value="system" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             {/* System info */}
-            <SectionCard title="System Information" icon={Server}>
+            <SectionCard title={t('admin.systemInformation')} icon={Server}>
               <dl className="space-y-2.5 text-sm">
                 {[
                   { label: 'Environment', value: <Badge variant="outline" className="font-mono text-xs">{import.meta.env.MODE}</Badge> },
@@ -1049,7 +1522,7 @@ export function SettingsPage() {
             </SectionCard>
 
             {/* Local actions */}
-            <SectionCard title="Admin Actions" description="Import/export your settings draft. Use section save buttons for backend persistence." icon={Settings2}>
+            <SectionCard title={t('admin.adminActions')} description={t('admin.systemDesc')} icon={Settings2}>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" size="sm" className="gap-2" onClick={resetAdvancedSettings}>
                   <RotateCcw className="h-3.5 w-3.5" />Reset
@@ -1070,8 +1543,8 @@ export function SettingsPage() {
 
           {/* Runtime overrides */}
           <SectionCard
-            title="Frontend Runtime Overrides"
-            description="Stored in localStorage, these take precedence over frontend env values."
+            title={t('admin.frontendRuntimeOverrides')}
+            description={t('admin.runtimeDesc')}
             icon={Wrench}
             footer={
               <Button size="sm" className="gap-2" onClick={saveRuntimeOverrides}>
@@ -1095,8 +1568,8 @@ export function SettingsPage() {
 
           {/* Voice agents */}
           <SectionCard
-            title="Voice Agent Configuration"
-            description="LiveKit and AI provider settings for voice agents."
+            title={t('admin.voiceAgentConfiguration')}
+            description={t('admin.voiceDesc')}
             icon={Bot}
           >
             {!hasLocalToken ? (
@@ -1157,7 +1630,7 @@ export function SettingsPage() {
           </SectionCard>
 
           {/* .env example */}
-          <SectionCard title="Runtime .env Example" icon={Server}>
+          <SectionCard title={t('admin.runtimeEnvExample')} icon={Server}>
             <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-xs font-mono leading-relaxed text-muted-foreground">
 {`VITE_API_BASE_URL=http://localhost:8000/api/v1
 VITE_QR_BRIDGE_URL=http://localhost:3000/qr

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -25,18 +26,19 @@ import { voiceAgentsApi } from '@/shared/api/voiceAgents';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatUptime(seconds: number): string {
+function formatUptime(t: (key: string) => string, seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  if (h > 0) return `${h}${t('voiceAgentsRuntime:hours')} ${m}${t('voiceAgentsRuntime:minutes')}`;
+  if (m > 0) return `${m}${t('voiceAgentsRuntime:minutes')} ${s}${t('voiceAgentsRuntime:seconds')}`;
+  return `${s}${t('voiceAgentsRuntime:seconds')}`;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function AccessDenied({ message }: { message: string }) {
+  const { t } = useTranslation();
   return (
     <div className="mx-auto max-w-5xl p-6">
       <div className="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
@@ -44,7 +46,7 @@ function AccessDenied({ message }: { message: string }) {
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
             <AlertCircle className="h-3.5 w-3.5" />
           </div>
-          <p className="text-sm font-semibold">Access Denied</p>
+           <p className="text-sm font-semibold">{t('voiceAgentsRuntime:accessDenied')}</p>
         </div>
         <div className="p-5">
           <p className="text-sm text-muted-foreground">{message}</p>
@@ -55,6 +57,7 @@ function AccessDenied({ message }: { message: string }) {
 }
 
 function StatusPill({ running }: { running: boolean }) {
+  const { t } = useTranslation();
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
@@ -69,12 +72,12 @@ function StatusPill({ running }: { running: boolean }) {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
           </span>
-          Running
+          {t('voiceAgentsRuntime:running')}
         </>
       ) : (
         <>
           <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
-          Stopped
+          {t('voiceAgentsRuntime:stopped')}
         </>
       )}
     </span>
@@ -116,22 +119,23 @@ function StatTile({
 const TERM_FONT = 'Menlo, Monaco, "Courier New", monospace';
 
 function LogLine({ line }: { line: string }) {
+  const { t } = useTranslation();
   const lower = line.toLowerCase();
   let levelColor = '#e6edf3';
   let levelLabel = '';
 
   if (/\b(error|err|exception|traceback|failed|fatal)\b/.test(lower)) {
     levelColor = '#f85149';
-    levelLabel = ' ERR';
+    levelLabel = t('voiceAgentsRuntime:err');
   } else if (/\b(warn|warning)\b/.test(lower)) {
     levelColor = '#d29922';
-    levelLabel = 'WARN';
+    levelLabel = t('voiceAgentsRuntime:warn');
   } else if (/\b(info)\b/.test(lower)) {
     levelColor = '#58a6ff';
-    levelLabel = 'INFO';
+    levelLabel = t('voiceAgentsRuntime:info');
   } else if (/\b(ok|success|started|ready|connected|complete)\b/.test(lower)) {
     levelColor = '#3fb950';
-    levelLabel = '  OK';
+    levelLabel = t('voiceAgentsRuntime:ok');
   }
 
   const tsMatch = line.match(/^(\d{2}:\d{2}:\d{2})/);
@@ -163,6 +167,7 @@ export function VoiceAgentsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [mode, setMode] = useState<'dev' | 'start'>('start');
+  const { t } = useTranslation();
   const hasLocalAuth = user?.role === 'admin' && !!getToken();
 
   const is401 = (err: unknown) => err instanceof ApiError && err.status === 401;
@@ -192,7 +197,7 @@ export function VoiceAgentsPage() {
       void logsQ.refetch();
     },
     onError: (err) =>
-      toast({ variant: 'destructive', title: 'Start failed', description: normalizeError(err) }),
+      toast({ variant: 'destructive', title: t('voiceAgentsRuntime:startFailed'), description: normalizeError(err) }),
   });
 
   const stopMut = useMutation({
@@ -202,15 +207,15 @@ export function VoiceAgentsPage() {
       void statusQ.refetch();
     },
     onError: (err) =>
-      toast({ variant: 'destructive', title: 'Stop failed', description: normalizeError(err) }),
+      toast({ variant: 'destructive', title: t('voiceAgentsRuntime:stopFailed'), description: normalizeError(err) }),
   });
 
   const escalateMut = useMutation({
     mutationFn: (payload: { room_name: string; reason: string }) => voiceAgentsApi.escalate(payload),
     onSuccess: (res) => {
-      toast({ title: `Escalation created: ${res.ticket_id}` });
+      toast({ title: t('voiceAgentsRuntime:escalationCreated', { id: res.ticket_id }) });
     },
-    onError: (err) => toast({ variant: 'destructive', title: 'Escalation failed', description: normalizeError(err) }),
+    onError: (err) => toast({ variant: 'destructive', title: t('voiceAgentsRuntime:escalationFailed'), description: normalizeError(err) }),
   });
 
   const unauthorized = is401(statusQ.error) || is401(logsQ.error);
@@ -219,13 +224,13 @@ export function VoiceAgentsPage() {
 
   if (!hasLocalAuth) {
     return (
-      <AccessDenied message="Admin authentication is required. Please sign in again with an admin account." />
+      <AccessDenied message={t('voiceAgentsRuntime:authRequired')} />
     );
   }
 
   if (unauthorized) {
     return (
-      <AccessDenied message="Session expired or unauthorized. Re-login as admin to continue." />
+      <AccessDenied message={t('voiceAgentsRuntime:sessionExpired')} />
     );
   }
 
@@ -239,8 +244,8 @@ export function VoiceAgentsPage() {
             <Radio className="h-4 w-4" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">Voice Agents Runtime</h1>
-            <p className="text-xs text-muted-foreground">Launch, stop, and monitor the voice agents process.</p>
+            <h1 className="text-lg font-semibold tracking-tight">{t('voiceAgentsRuntime:title')}</h1>
+            <p className="text-xs text-muted-foreground">{t('voiceAgentsRuntime:subtitle')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -253,11 +258,11 @@ export function VoiceAgentsPage() {
             <RefreshCw
               className={`h-3.5 w-3.5 ${statusQ.isFetching || logsQ.isFetching ? 'animate-spin' : ''}`}
             />
-            Refresh
+            {t('voiceAgentsRuntime:refresh')}
           </Button>
           <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs">
             <Link to="/settings">
-              <Settings2 className="h-3.5 w-3.5" />Settings
+              <Settings2 className="h-3.5 w-3.5" />{t('voiceAgentsRuntime:settings')}
             </Link>
           </Button>
         </div>
@@ -270,7 +275,7 @@ export function VoiceAgentsPage() {
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Activity className="h-3.5 w-3.5" />
             </div>
-            <p className="text-sm font-semibold">Runtime Status</p>
+            <p className="text-sm font-semibold">{t('voiceAgentsRuntime:runtimeStatus')}</p>
           </div>
           {!statusQ.isLoading && !statusQ.error && <StatusPill running={isRunning} />}
         </div>
@@ -278,7 +283,7 @@ export function VoiceAgentsPage() {
         <div className="p-5 space-y-5">
           {statusQ.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />Loading status…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />{t('voiceAgentsRuntime:loadingStatus')}
             </div>
           ) : statusQ.error ? (
             <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
@@ -286,16 +291,16 @@ export function VoiceAgentsPage() {
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-3">
-              <StatTile icon={Hash} label="PID" value={statusQ.data?.pid ?? '—'} />
-              <StatTile icon={Settings2} label="Mode" value={statusQ.data?.mode ?? '—'} />
+              <StatTile icon={Hash} label={t('voiceAgentsRuntime:pid')} value={statusQ.data?.pid ?? '—'} />
+              <StatTile icon={Settings2} label={t('voiceAgentsRuntime:mode')} value={statusQ.data?.mode ?? '—'} />
               <StatTile
                 icon={Clock}
-                label="Uptime"
-                value={statusQ.data?.uptime_seconds ? formatUptime(statusQ.data.uptime_seconds) : '—'}
+                label={t('voiceAgentsRuntime:uptime')}
+                value={statusQ.data?.uptime_seconds ? formatUptime(t, statusQ.data.uptime_seconds) : '—'}
               />
               <StatTile
                 icon={Activity}
-                label="Last Exit Code"
+                label={t('voiceAgentsRuntime:lastExitCode')}
                 value={statusQ.data?.last_exit_code ?? '—'}
                 valueClassName={
                   statusQ.data?.last_exit_code != null && statusQ.data.last_exit_code !== 0
@@ -305,7 +310,7 @@ export function VoiceAgentsPage() {
               />
               <StatTile
                 icon={FileText}
-                label="Log File"
+                label={t('voiceAgentsRuntime:logFile')}
                 value={statusQ.data?.log_file ?? '—'}
                 mono
                 truncate
@@ -321,8 +326,8 @@ export function VoiceAgentsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="start">start</SelectItem>
-                <SelectItem value="dev">dev</SelectItem>
+                <SelectItem value="start">{t('voiceAgentsRuntime:modeStart')}</SelectItem>
+                <SelectItem value="dev">{t('voiceAgentsRuntime:modeDev')}</SelectItem>
               </SelectContent>
             </Select>
 
@@ -335,7 +340,7 @@ export function VoiceAgentsPage() {
               {startMut.isPending
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : <Play className="h-3.5 w-3.5" />}
-              Start
+              {t('voiceAgentsRuntime:start')}
             </Button>
 
             <Button
@@ -348,7 +353,7 @@ export function VoiceAgentsPage() {
               {stopMut.isPending
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : <Square className="h-3.5 w-3.5" />}
-              Stop
+              {t('voiceAgentsRuntime:stop')}
             </Button>
             <Button
               size="sm"
@@ -356,26 +361,20 @@ export function VoiceAgentsPage() {
               className="gap-1.5 text-xs"
               disabled={escalateMut.isPending}
               onClick={() => {
-                const room = window.prompt('Enter room name to escalate (e.g. support-call-123):');
+                const room = window.prompt(t('voiceAgentsRuntime:roomNamePrompt'));
                 if (!room) return;
-                const reason = window.prompt('Reason for escalation:');
+                const reason = window.prompt(t('voiceAgentsRuntime:reasonPrompt'));
                 if (!reason) return;
                 escalateMut.mutate({ room_name: room.trim(), reason: reason.trim() });
               }}
             >
               {escalateMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Flag className="h-3.5 w-3.5" />}
-              Escalate Call
+              {t('voiceAgentsRuntime:escalateCall')}
             </Button>
           </div>
 
           <p className="text-xs text-muted-foreground">
-            To update API keys, models, or provider settings, open{' '}
-            <Link
-              to="/settings"
-              className="underline underline-offset-2 hover:text-foreground transition-colors"
-            >
-              Settings → Voice Agents Configuration
-            </Link>.
+            {t('voiceAgentsRuntime:settingsHint')}
           </p>
         </div>
       </div>
@@ -395,7 +394,7 @@ export function VoiceAgentsPage() {
             className="flex-1 text-center"
             style={{ fontFamily: TERM_FONT, fontSize: 11, color: '#8b949e', letterSpacing: '0.02em' }}
           >
-            voice-agents — process logs
+            {t('voiceAgentsRuntime:processLogs')}
           </span>
           {logsQ.data?.lines && (
             <span
@@ -408,7 +407,7 @@ export function VoiceAgentsPage() {
                 border: '1px solid #30363d',
               }}
             >
-              {logsQ.data.lines.length} lines
+              {t('voiceAgentsRuntime:lines', { count: logsQ.data.lines.length })}
             </span>
           )}
         </div>
@@ -424,7 +423,7 @@ export function VoiceAgentsPage() {
               style={{ fontFamily: TERM_FONT, fontSize: 12, color: '#8b949e' }}
             >
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading logs…
+              {t('voiceAgentsRuntime:loadingLogs')}
             </div>
           ) : logsQ.error ? (
             <div
@@ -436,7 +435,7 @@ export function VoiceAgentsPage() {
             </div>
           ) : (logsQ.data?.lines ?? []).length === 0 ? (
             <span style={{ fontFamily: TERM_FONT, fontSize: 12, color: '#6e7681' }}>
-              No logs yet.
+              {t('voiceAgentsRuntime:noLogsYet')}
             </span>
           ) : (
             <div>

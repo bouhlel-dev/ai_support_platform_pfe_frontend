@@ -166,7 +166,7 @@ function DashboardHeader({
   return (
     <div className="space-y-1">
       <p className="text-sm font-medium text-muted-foreground">{welcomeBack}</p>
-      <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h1>
       <p className="text-sm text-muted-foreground">{subtitle}</p>
     </div>
   );
@@ -201,9 +201,9 @@ function QuickActionCard({
   return (
     <Link
       to={to}
-      className={`group flex items-start gap-4 rounded-xl border p-4 transition-colors ${surfaceClass}`}
+      className={`group flex items-start gap-3 rounded-xl border p-3 transition-colors sm:gap-4 sm:p-4 ${surfaceClass}`}
     >
-      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card shadow-sm">
+      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card shadow-sm sm:h-10 sm:w-10">
         <Icon className={`h-5 w-5 ${iconClass}`} />
       </span>
       <div className="min-w-0">
@@ -1053,7 +1053,7 @@ function UrgentTicketsSection({
 
   return (
     <div className="rounded-xl border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b p-4">
+      <div className="flex items-center justify-between gap-3 border-b p-3 sm:p-4">
         <h2 className="text-sm font-semibold">{t('dashboardCharts.urgentTickets')}</h2>
         {hasMore && !error ? (
           <button
@@ -1071,12 +1071,12 @@ function UrgentTicketsSection({
       {error ? (
         <ErrorState message={normalizeError(error)} onRetry={onRetry} />
       ) : urgentTickets.length === 0 && !isLoading ? (
-        <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-10 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-            <AlertTriangle className="h-6 w-6 text-muted-foreground" />
+        <div className="flex min-h-[180px] flex-col items-center justify-center px-4 py-8 text-center sm:min-h-[220px] sm:px-6 sm:py-10">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted sm:mb-4 sm:h-14 sm:w-14">
+            <AlertTriangle className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
           </div>
-          <h3 className="text-base font-semibold">{t('dashboardCharts.noUrgentTickets')}</h3>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          <h3 className="text-sm font-semibold sm:text-base">{t('dashboardCharts.noUrgentTickets')}</h3>
+          <p className="mt-1 max-w-sm text-xs text-muted-foreground sm:text-sm">
             {t('dashboardCharts.highPriorityActive')}
           </p>
         </div>
@@ -1086,7 +1086,7 @@ function UrgentTicketsSection({
             <Link
               to={`/tickets/${ticket.id}`}
               key={ticket.id}
-              className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50"
+              className="flex items-center justify-between p-3 transition-colors hover:bg-muted/50 sm:p-4"
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{ticket.subject}</p>
@@ -1123,7 +1123,7 @@ function RecentTicketsSection({
   const resolvedTitle = title ?? t('dashboard.myRecentTickets');
   return (
     <div className="rounded-xl border bg-card">
-      <div className="border-b p-4">
+      <div className="border-b p-3 sm:p-4">
         <h2 className="text-sm font-semibold">{resolvedTitle}</h2>
       </div>
 
@@ -1140,7 +1140,7 @@ function RecentTicketsSection({
             <Link
               to={`/tickets/${ticket.id}`}
               key={ticket.id}
-              className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50"
+              className="flex items-center justify-between p-3 transition-colors hover:bg-muted/50 sm:p-4"
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{ticket.subject}</p>
@@ -1253,7 +1253,7 @@ export function DashboardPage() {
 
   if (error && !data) {
     return (
-      <div className="mx-auto max-w-7xl space-y-6 p-6">
+      <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
         <DashboardHeader
           title={t(copy.titleKey)}
           subtitle={t(copy.subtitleKey)}
@@ -1266,7 +1266,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       <DashboardHeader
         title={t(copy.titleKey)}
         subtitle={t(copy.subtitleKey)}
@@ -1276,7 +1276,7 @@ export function DashboardPage() {
 
       {role === 'client' ? (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-3">
             <QuickActionCard
               icon={MessageSquare}
               title={t('dashboard.startSupportChat')}
@@ -1299,14 +1299,14 @@ export function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <KpiCard title={t('dashboard.myTotalTickets')} value={counts?.total ?? 0} icon={Ticket} loading={isLoading} />
             <KpiCard title={t('dashboard.myOpenTickets')} value={counts?.open ?? 0} icon={Clock} variant="info" loading={isLoading} />
             <KpiCard title={t('dashboard.inProgress')} value={counts?.in_progress ?? 0} icon={Activity} variant="warning" loading={isLoading} />
             <KpiCard title={t('dashboard.resolved')} value={counts?.resolved ?? 0} icon={ShieldCheck} variant="success" loading={isLoading} />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
             <ClientSupportStatusCard counts={counts} weekly={weekly} />
             <WeeklyActivityCard weekly={weekly} urgentOpenCount={urgentOpenCount} />
           </div>
@@ -1323,7 +1323,7 @@ export function DashboardPage() {
 
       {role === 'agent' ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <KpiCard
               title={t('dashboardCharts.myResolved')}
               value={personalPerformance?.my_resolved_tickets ?? 0}
@@ -1353,7 +1353,7 @@ export function DashboardPage() {
             />
           </div>
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
               <WeeklyActivityCard weekly={weekly} urgentOpenCount={urgentOpenCount} />
               <AiOpsCard aiOps={aiOps} />
               <LeaderboardCard
@@ -1363,7 +1363,7 @@ export function DashboardPage() {
               />
             </div>
 
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 xl:grid-cols-3">
             <TicketVolumeChart
               volumeChartData={volumeChartData}
               volumeRange={volumeRange}
@@ -1377,7 +1377,7 @@ export function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-3 sm:gap-4 xl:grid-cols-2">
             <UrgentTicketsSection
               urgentTickets={urgentTickets}
               error={error}
@@ -1406,7 +1406,7 @@ export function DashboardPage() {
 
       {role === 'admin' ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <KpiCard title={t('dashboard.totalTickets')} value={counts?.total ?? 0} icon={Ticket} loading={isLoading} />
             <KpiCard title={t('dashboard.openTickets')} value={counts?.open ?? 0} icon={Clock} variant="info" loading={isLoading} />
             <KpiCard
@@ -1428,13 +1428,13 @@ export function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
             <WeeklyActivityCard weekly={weekly} urgentOpenCount={urgentOpenCount} />
             <AiOpsCard aiOps={aiOps} />
             <LeaderboardCard leaderboard={leaderboard} />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 xl:grid-cols-3">
             <TicketVolumeChart
               volumeChartData={volumeChartData}
               volumeRange={volumeRange}
@@ -1448,7 +1448,7 @@ export function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 xl:grid-cols-3">
             <WeeklyComparisonChart weeklyComparisonData={weeklyComparisonData} />
             <UserRoleCompositionChart
               userRoleChartData={userRoleChartData}

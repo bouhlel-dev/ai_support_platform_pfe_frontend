@@ -140,7 +140,7 @@ export function QrBridgePage() {
             type="button"
             onClick={() => setMode('qr')}
             className="absolute left-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-200 transition hover:bg-slate-700"
-            aria-label="Back to QR"
+            aria-label={t('qrBridge.backToQr')}
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -181,7 +181,7 @@ export function QrBridgePage() {
                 {showQrOverlay && (
                   <div className="absolute inset-2 flex flex-col items-center justify-center rounded-lg bg-white/95 p-4 text-center">
                     <p className="text-sm font-medium text-slate-700">
-                      {qrExpired ? 'Le code QR a expire. Refreshing...' : 'Waiting for QR code from bridge (auto retry enabled)...'}
+                      {qrExpired ? t('qrBridge.qrExpired') : t('qrBridge.waitingForQr')}
                     </p>
                     <Button onClick={refreshQr} className="mt-3 gap-2">
                       <RefreshCw className="h-4 w-4" />
@@ -215,7 +215,7 @@ export function QrBridgePage() {
             <p className="text-sm text-slate-300">{t('qrBridge.phonePairingHint')}</p>
 
             <div className="space-y-3">
-              <div className="rounded-full border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-slate-200">Tunisie (+216)</div>
+              <div className="rounded-full border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-slate-200">{t('qrBridge.tunisiaLabel')}</div>
               <div className="relative">
                 <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-slate-300">+216</span>
                 <Input
@@ -267,10 +267,10 @@ export function QrBridgePage() {
             </div>
 
             <div className="space-y-3 text-sm text-slate-300">
-              <p>1. Open WhatsApp on your phone.</p>
-              <p>2. On Android tap Menu, on iPhone tap Settings.</p>
-              <p>3. Tap Linked Devices, then Link a Device.</p>
-              <p>4. Choose phone-number pairing and enter this code.</p>
+              <p>{t('qrBridge.step1')}</p>
+              <p>{t('qrBridge.step2')}</p>
+              <p>{t('qrBridge.step3')}</p>
+              <p>{t('qrBridge.step4')}</p>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2">

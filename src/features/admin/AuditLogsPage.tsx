@@ -201,7 +201,7 @@ export function AuditLogsPage() {
     }
 
     const confirmation = window.prompt(
-      `Type ${CLEAR_AUDIT_CONFIRMATION} to permanently clear all audit logs.`,
+      t('auditLogs.confirmClear', { phrase: CLEAR_AUDIT_CONFIRMATION }),
       '',
     );
     if (!confirmation) {
@@ -212,7 +212,7 @@ export function AuditLogsPage() {
       toast({
         variant: 'destructive',
         title: t('auditLogs.confirmationMismatch'),
-        description: `You must type ${CLEAR_AUDIT_CONFIRMATION} exactly.`,
+        description: t('auditLogs.typeExact', { phrase: CLEAR_AUDIT_CONFIRMATION }),
       });
       return;
     }
@@ -242,16 +242,16 @@ export function AuditLogsPage() {
     };
 
     if (dateFrom && dateTo) {
-      return `${formatDateLabel(dateFrom)} to ${formatDateLabel(dateTo)}`;
+      return t('auditLogs.dateFromTo', { from: formatDateLabel(dateFrom), to: formatDateLabel(dateTo) });
     }
     if (dateFrom) {
-      return `From ${formatDateLabel(dateFrom)}`;
+      return t('auditLogs.fromDate', { date: formatDateLabel(dateFrom) });
     }
     if (dateTo) {
-      return `Up to ${formatDateLabel(dateTo)}`;
+      return t('auditLogs.toDate', { date: formatDateLabel(dateTo) });
     }
-    return 'All dates';
-  }, [dateFrom, dateTo]);
+    return t('auditLogs.allDates');
+  }, [dateFrom, dateTo, t]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -265,11 +265,11 @@ export function AuditLogsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => { void handleExport(); }} disabled={isExporting || clearLogsMut.isPending}>
             {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Export CSV
+            {t('auditLogs.exportCsv')}
           </Button>
           <Button variant="destructive" onClick={handleClearAudit} disabled={clearLogsMut.isPending || isExporting}>
             {clearLogsMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-            Clear logs
+            {t('auditLogs.clearLogs')}
           </Button>
           <Button
             variant="outline"
@@ -279,26 +279,26 @@ export function AuditLogsPage() {
             disabled={isExporting || clearLogsMut.isPending}
           >
             <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
+            {t('auditLogs.refresh')}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Total events</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.totalEvents')}</p>
           <p className="mt-2 text-2xl font-semibold">{logsQ.data?.total ?? 0}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Creates</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.creates')}</p>
           <p className="mt-2 text-2xl font-semibold text-emerald-600 dark:text-emerald-300">{actionCounts.creates}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Deletes</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.deletes')}</p>
           <p className="mt-2 text-2xl font-semibold text-rose-600 dark:text-rose-300">{actionCounts.deletes}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Logins</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.logins')}</p>
           <p className="mt-2 text-2xl font-semibold text-blue-600 dark:text-blue-300">{actionCounts.logins}</p>
         </div>
       </div>
@@ -310,7 +310,7 @@ export function AuditLogsPage() {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search description, resource, action, or user ID"
+              placeholder={t('auditLogs.searchAuditLogs')}
               className="pl-8"
             />
           </div>
@@ -328,7 +328,7 @@ export function AuditLogsPage() {
                 {value === 'all' ? (
                   <span className="inline-flex items-center gap-1">
                     <Filter className="h-3.5 w-3.5" />
-                    All
+                    {t('auditLogs.allActions')}
                   </span>
                 ) : (
                   value.toLowerCase().replace(/_/g, ' ')
@@ -340,13 +340,13 @@ export function AuditLogsPage() {
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Resource type</p>
+            <p className="text-xs text-muted-foreground">{t('auditLogs.resourceType')}</p>
             <Select value={resourceFilter} onValueChange={setResourceFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Resource type" />
+                <SelectValue placeholder={t('auditLogs.resourceType')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All resources</SelectItem>
+                <SelectItem value="all">{t('auditLogs.allResources')}</SelectItem>
                 {resourceOptions.map((value) => (
                   <SelectItem key={value} value={value}>
                     {value}
@@ -357,21 +357,21 @@ export function AuditLogsPage() {
           </div>
 
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">User ID</p>
+            <p className="text-xs text-muted-foreground">{t('auditLogs.userId')}</p>
             <Input
               value={userFilter}
               onChange={(event) => setUserFilter(event.target.value)}
-              placeholder="Filter by user ID"
+              placeholder={t('auditLogs.filterUserId')}
             />
           </div>
 
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Created from</p>
+            <p className="text-xs text-muted-foreground">{t('auditLogs.createdFrom')}</p>
             <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
           </div>
 
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Created to</p>
+            <p className="text-xs text-muted-foreground">{t('auditLogs.createdTo')}</p>
             <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
           </div>
 
@@ -388,20 +388,20 @@ export function AuditLogsPage() {
                 setSearch('');
               }}
             >
-              Clear filters
+              {t('auditLogs.clearFilters')}
             </Button>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant={hasDateRangeFilter ? 'default' : 'outline'}>
-            Date range
+            {t('auditLogs.dateRange')}
           </Badge>
           <span className="text-muted-foreground">{dateRangeSummary}</span>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Showing {logs.length} of {logsQ.data?.total ?? 0} audit records.
+          {t('auditLogs.showing', { count: logs.length, total: logsQ.data?.total ?? 0 })}
         </p>
 
         {logsQ.error ? (
@@ -414,20 +414,20 @@ export function AuditLogsPage() {
         ) : logsQ.isLoading ? (
           <div className="flex items-center justify-center py-14 text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading audit logs...
+            {t('auditLogs.loadingLogs')}
           </div>
         ) : logs.length === 0 ? (
-          <EmptyState title="No logs" description="No audit records match the current filters." />
+          <EmptyState title={t('auditLogs.noLogs')} description={t('auditLogs.noLogsMatch')} />
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Action</TableHead>
-                <TableHead>Resource</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Timestamp</TableHead>
-                <TableHead className="text-right">Details</TableHead>
+                <TableHead>{t('auditLogs.action')}</TableHead>
+                <TableHead>{t('auditLogs.resource')}</TableHead>
+                <TableHead>{t('auditLogs.description')}</TableHead>
+                <TableHead>{t('auditLogs.user')}</TableHead>
+                <TableHead>{t('auditLogs.timestamp')}</TableHead>
+                <TableHead className="text-right">{t('auditLogs.details')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -457,7 +457,7 @@ export function AuditLogsPage() {
                           variant="ghost"
                           onClick={() => setExpandedLogId(expanded ? null : entry.id)}
                         >
-                          {expanded ? 'Hide' : 'View'}
+                          {expanded ? t('auditLogs.hide') : t('auditLogs.view')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -467,28 +467,28 @@ export function AuditLogsPage() {
                         <TableCell colSpan={6} className="bg-muted/20">
                           <div className="grid gap-3 md:grid-cols-3">
                             <div className="rounded-md border bg-background p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Resource ID</p>
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.resourceId')}</p>
                               <p className="mt-1 break-all text-xs">{entry.resource_id || '-'}</p>
                             </div>
                             <div className="rounded-md border bg-background p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Trace ID</p>
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.traceId')}</p>
                               <p className="mt-1 break-all text-xs">{entry.trace_id || '-'}</p>
                             </div>
                             <div className="rounded-md border bg-background p-3">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">IP Address</p>
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.ipAddress')}</p>
                               <p className="mt-1 break-all text-xs">{entry.ip_address || '-'}</p>
                             </div>
                           </div>
 
                           <div className="mt-3 rounded-md border bg-background p-3">
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Description</p>
-                            <p className="mt-1 text-sm">{entry.description || 'No description provided.'}</p>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.description')}</p>
+                            <p className="mt-1 text-sm">{entry.description || t('auditLogs.noDescription')}</p>
                           </div>
 
                           <div className="mt-3 rounded-md border bg-background p-3">
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Metadata</p>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('auditLogs.metadata')}</p>
                             <pre className="mt-2 max-h-56 overflow-auto rounded bg-muted p-2 text-xs">
-                              {entry.meta ? JSON.stringify(entry.meta, null, 2) : 'No metadata recorded.'}
+                              {entry.meta ? JSON.stringify(entry.meta, null, 2) : t('auditLogs.noMetadata')}
                             </pre>
                           </div>
                         </TableCell>

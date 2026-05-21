@@ -49,13 +49,13 @@ type SnippetPayload = Parameters<typeof conversationsApi.createSnippet>[0];
 
 const CHANNEL_OPTIONS: Array<{
   value: SnippetFilter;
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
 }> = [
-  { value: 'ALL', label: 'All channels', description: 'Everything currently configured.' },
-  { value: 'CHAT', label: 'Chat', description: 'Used in operator conversations.' },
-  { value: 'WHATSAPP', label: 'WhatsApp', description: 'Used in WhatsApp replies.' },
-  { value: 'EMAIL', label: 'Email', description: 'Used in email drafting.' },
+  { value: 'ALL', labelKey: 'allChannels', descKey: 'allChannelsDesc' },
+  { value: 'CHAT', labelKey: 'chatLabelOption', descKey: 'chatDesc' },
+  { value: 'WHATSAPP', labelKey: 'whatsappLabelOption', descKey: 'whatsappDesc' },
+  { value: 'EMAIL', labelKey: 'emailLabelOption', descKey: 'emailDesc' },
 ];
 
 const EDITOR_CHANNELS: SnippetChannel[] = ['CHAT', 'WHATSAPP', 'EMAIL'];
@@ -76,17 +76,17 @@ function normalizeChannel(channel?: string | null): SnippetChannel {
   return 'CHAT';
 }
 
-function channelLabel(channel?: string | null) {
+function channelLabel(t: (key: string) => string, channel?: string | null) {
   const value = normalizeChannel(channel);
-  if (value === 'WHATSAPP') return 'WhatsApp';
-  if (value === 'EMAIL') return 'Email';
-  return 'Chat';
+  if (value === 'WHATSAPP') return t('aiDraftSnippets.whatsappLabel');
+  if (value === 'EMAIL') return t('aiDraftSnippets.emailLabel');
+  return t('aiDraftSnippets.chatLabel');
 }
 
-function formatDateTime(value?: string | null) {
-  if (!value) return 'Unknown';
+function formatDateTime(t: (key: string) => string, value?: string | null) {
+  if (!value) return t('aiDraftSnippets.unknown');
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
+  if (Number.isNaN(date.getTime())) return t('aiDraftSnippets.unknown');
   return date.toLocaleString();
 }
 
@@ -259,8 +259,14 @@ export function AiDraftSnippetsPage() {
     setForm(toEditorState(selectedSnippet));
   }, [selectedSnippet]);
 
-  const selectedChannelOption =
-    CHANNEL_OPTIONS.find((option) => option.value === channelFilter) ?? CHANNEL_OPTIONS[0];
+  const selectedChannelOption = useMemo(() => {
+    const option = CHANNEL_OPTIONS.find((o) => o.value === channelFilter) ?? CHANNEL_OPTIONS[0];
+    return {
+      value: option.value,
+      label: t(`aiDraftSnippets.${option.labelKey}`),
+      description: t(`aiDraftSnippets.${option.descKey}`),
+    };
+  }, [channelFilter, t]);
 
   const startNewSnippet = () => {
     setCreateForm({
@@ -275,16 +281,16 @@ export function AiDraftSnippetsPage() {
     if (!normalized.title) {
       toast({
         variant: 'destructive',
-        title: 'Title is required',
-        description: 'Give the snippet a clear title before saving.',
+        title: t('aiDraftSnippets.titleRequired'),
+        description: t('aiDraftSnippets.titleRequiredDesc'),
       });
       return false;
     }
     if (!normalized.body) {
       toast({
         variant: 'destructive',
-        title: 'Body is required',
-        description: 'Add the message body that operators should insert.',
+        title: t('aiDraftSnippets.bodyRequired'),
+        description: t('aiDraftSnippets.bodyRequiredDesc'),
       });
       return false;
     }
@@ -309,7 +315,7 @@ export function AiDraftSnippetsPage() {
     if (!selectedSnippet) {
       return;
     }
-    const confirmed = window.confirm(`Delete "${selectedSnippet.title}"? This cannot be undone.`);
+    const confirmed = window.confirm(t('aiDraftSnippets.deleteConfirm', { title: selectedSnippet.title }));
     if (!confirmed) {
       return;
     }
@@ -320,54 +326,54 @@ export function AiDraftSnippetsPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">AI Draft Snippets</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('aiDraftSnippets.pageTitle')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage the shared draft snippets used by operators in Chat, WhatsApp, and Email.
+            {t('aiDraftSnippets.pageSubtitle')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => void snippetsQ.refetch()}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
+            {t('aiDraftSnippets.refresh')}
           </Button>
           <Button onClick={startNewSnippet}>
             <Plus className="mr-2 h-4 w-4" />
-            New snippet
+            {t('aiDraftSnippets.newSnippet')}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Visible in scope</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('aiDraftSnippets.visibleInScope')}</p>
           <p className="mt-2 text-2xl font-semibold">{stats.total}</p>
           <p className="mt-1 text-xs text-muted-foreground">{selectedChannelOption.label}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Active</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('aiDraftSnippets.activeLabel')}</p>
           <p className="mt-2 text-2xl font-semibold text-emerald-600 dark:text-emerald-300">
             {stats.active}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Ready for operators</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('aiDraftSnippets.readyForOperators')}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Inactive</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('aiDraftSnippets.inactiveLabel')}</p>
           <p className="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-300">
             {stats.inactive}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Saved but hidden</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('aiDraftSnippets.savedButHidden')}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Chat / WhatsApp</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('aiDraftSnippets.chatWhatsapp')}</p>
           <p className="mt-2 text-2xl font-semibold">{stats.chat + stats.whatsapp}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Chat {stats.chat} - WhatsApp {stats.whatsapp}
+            {t('aiDraftSnippets.chatWhatsappDesc', { chat: stats.chat, whatsapp: stats.whatsapp })}
           </p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Email</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('aiDraftSnippets.emailStat')}</p>
           <p className="mt-2 text-2xl font-semibold">{stats.email}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Draft reply templates</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('aiDraftSnippets.draftReplyTemplates')}</p>
         </div>
       </div>
 
@@ -375,10 +381,10 @@ export function AiDraftSnippetsPage() {
         <div className="rounded-xl border bg-card p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold">Snippet library</h2>
+              <h2 className="text-sm font-semibold">{t('aiDraftSnippets.snippetLibrary')}</h2>
               <p className="text-xs text-muted-foreground">{selectedChannelOption.description}</p>
             </div>
-            <Badge variant="outline">{filteredSnippets.length} shown</Badge>
+            <Badge variant="outline">{t('aiDraftSnippets.countShown', { count: filteredSnippets.length })}</Badge>
           </div>
 
           <div className="mt-4 space-y-3">
@@ -387,7 +393,7 @@ export function AiDraftSnippetsPage() {
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search snippets"
+                placeholder={t('aiDraftSnippets.searchSnippets')}
                 className="pl-8"
               />
             </div>
@@ -405,7 +411,7 @@ export function AiDraftSnippetsPage() {
                   )}
                   onClick={() => setChannelFilter(option.value)}
                 >
-                  <p className="text-xs font-semibold uppercase tracking-wide">{option.label}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide">{t(`aiDraftSnippets.${option.labelKey}`)}</p>
                 </button>
               ))}
             </div>
@@ -421,8 +427,8 @@ export function AiDraftSnippetsPage() {
               />
             ) : filteredSnippets.length === 0 ? (
               <EmptyState
-                title="No snippets found"
-                description="Try a different channel filter or create the first shared draft snippet."
+                title={t('aiDraftSnippets.noSnippets')}
+                description={t('aiDraftSnippets.noSnippetsDesc')}
               />
             ) : (
               <div className="space-y-2">
@@ -451,14 +457,14 @@ export function AiDraftSnippetsPage() {
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
                           <Badge variant={snippet.is_active ? 'default' : 'outline'}>
-                            {snippet.is_active ? 'Active' : 'Inactive'}
+                            {snippet.is_active ? t('aiDraftSnippets.activeBadge') : t('aiDraftSnippets.inactiveBadge')}
                           </Badge>
-                          <Badge variant="outline">{channelLabel(snippetChannel)}</Badge>
+                          <Badge variant="outline">{channelLabel(t, snippetChannel)}</Badge>
                         </div>
                       </div>
                       <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>{snippet.shortcut ? `${snippet.shortcut} shortcut` : 'No shortcut'}</span>
-                        <span>Updated {formatDateTime(snippet.updated_at)}</span>
+                        <span>{snippet.shortcut ? t('aiDraftSnippets.shortcutPrefix', { shortcut: snippet.shortcut }) : t('aiDraftSnippets.noShortcut')}</span>
+                        <span>{t('aiDraftSnippets.updatedPrefix', { date: formatDateTime(t, snippet.updated_at) })}</span>
                       </div>
                     </button>
                   );
@@ -471,11 +477,11 @@ export function AiDraftSnippetsPage() {
         <div className="rounded-xl border bg-card p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold">Snippet editor</h2>
+              <h2 className="text-sm font-semibold">{t('aiDraftSnippets.snippetEditor')}</h2>
               <p className="text-xs text-muted-foreground">
                 {selectedSnippet
-                  ? `Editing ${selectedSnippet.title}`
-                  : 'Select a snippet from the library to edit it.'}
+                  ? t('aiDraftSnippets.editingSnippet', { title: selectedSnippet.title })
+                  : t('aiDraftSnippets.editorDescription')}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -491,7 +497,7 @@ export function AiDraftSnippetsPage() {
                   ) : (
                     <Trash2 className="mr-2 h-4 w-4" />
                   )}
-                  Delete
+                  {t('aiDraftSnippets.delete')}
                 </Button>
               ) : null}
               <Button
@@ -504,7 +510,7 @@ export function AiDraftSnippetsPage() {
                 }}
                 disabled={!selectedSnippet || updateMut.isPending || deleteMut.isPending}
               >
-                Reset
+                {t('aiDraftSnippets.reset')}
               </Button>
               <Button
                 onClick={handleSave}
@@ -515,47 +521,47 @@ export function AiDraftSnippetsPage() {
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                Save snippet
+                {t('aiDraftSnippets.saveSnippet')}
               </Button>
             </div>
           </div>
 
           {!selectedSnippet && !snippetsQ.isLoading ? (
             <EmptyState
-              title="No snippet selected"
-              description="Pick a snippet from the left, or create a new one to start managing AI draft snippets."
+              title={t('aiDraftSnippets.noSnippetSelected')}
+              description={t('aiDraftSnippets.noSnippetSelectedDesc')}
             />
           ) : (
             <div className="mt-4 space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="snippet-title">Title</Label>
+                  <Label htmlFor="snippet-title">{t('aiDraftSnippets.titleLabel')}</Label>
                   <Input
                     id="snippet-title"
                     value={form.title}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, title: event.target.value }))
                     }
-                    placeholder="Investigation in progress"
+                    placeholder={t('aiDraftSnippets.titlePlaceholder')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="snippet-shortcut">Shortcut</Label>
+                  <Label htmlFor="snippet-shortcut">{t('aiDraftSnippets.shortcutLabel')}</Label>
                   <Input
                     id="snippet-shortcut"
                     value={form.shortcut ?? ''}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, shortcut: event.target.value }))
                     }
-                    placeholder="investigating"
+                    placeholder={t('aiDraftSnippets.shortcutPlaceholder')}
                   />
                 </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-[minmax(0,220px),1fr]">
                 <div className="space-y-2">
-                  <Label htmlFor="snippet-channel">Channel</Label>
+                  <Label htmlFor="snippet-channel">{t('aiDraftSnippets.channelLabel')}</Label>
                   <Select
                     value={normalizeChannel(form.channel)}
                     onValueChange={(value) =>
@@ -568,7 +574,7 @@ export function AiDraftSnippetsPage() {
                     <SelectContent>
                       {EDITOR_CHANNELS.map((channel) => (
                         <SelectItem key={channel} value={channel}>
-                          {channelLabel(channel)}
+                          {channelLabel(t, channel)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -578,9 +584,9 @@ export function AiDraftSnippetsPage() {
                 <div className="rounded-xl border bg-muted/20 px-4 py-3">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-sm font-medium">Active for operators</p>
+                      <p className="text-sm font-medium">{t('aiDraftSnippets.activeForOperators')}</p>
                       <p className="text-xs text-muted-foreground">
-                        Inactive snippets stay saved here but disappear from the operator picker.
+                        {t('aiDraftSnippets.inactiveDescription')}
                       </p>
                     </div>
                     <Switch
@@ -594,19 +600,19 @@ export function AiDraftSnippetsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="snippet-description">Description</Label>
+                <Label htmlFor="snippet-description">{t('aiDraftSnippets.descriptionLabel')}</Label>
                 <Input
                   id="snippet-description"
                   value={form.description ?? ''}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, description: event.target.value }))
                   }
-                  placeholder="Short note so admins know when to use this snippet"
+                  placeholder={t('aiDraftSnippets.descriptionPlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="snippet-body">Body</Label>
+                <Label htmlFor="snippet-body">{t('aiDraftSnippets.bodyLabel')}</Label>
                 <Textarea
                   id="snippet-body"
                   rows={12}
@@ -614,7 +620,7 @@ export function AiDraftSnippetsPage() {
                   onChange={(event) =>
                     setForm((current) => ({ ...current, body: event.target.value }))
                   }
-                  placeholder="Hi {{customer_name}}, we are investigating this now and will follow up shortly."
+                  placeholder={t('aiDraftSnippets.bodyPlaceholder')}
                   className="resize-y"
                 />
               </div>
@@ -623,34 +629,30 @@ export function AiDraftSnippetsPage() {
                 <div className="rounded-xl border bg-muted/20 p-4">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="h-4 w-4 text-primary" />
-                    <p className="text-sm font-medium">Chat placeholders</p>
+                    <p className="text-sm font-medium">{t('aiDraftSnippets.chatPlaceholders')}</p>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Use variables like <code>{'{{customer_name}}'}</code>,{' '}
-                    <code>{'{{conversation_id}}'}</code>, and{' '}
-                    <code>{'{{latest_customer_message}}'}</code>.
+                    {t('aiDraftSnippets.chatPlaceholdersDesc')}
                   </p>
                 </div>
 
                 <div className="rounded-xl border bg-muted/20 p-4">
                   <div className="flex items-center gap-2">
                     <MessageCircle className="h-4 w-4 text-primary" />
-                    <p className="text-sm font-medium">WhatsApp alignment</p>
+                    <p className="text-sm font-medium">{t('aiDraftSnippets.whatsappAlignment')}</p>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Shared WhatsApp snippets are managed here too, so operators see the same
-                    controlled options.
+                    {t('aiDraftSnippets.whatsappAlignmentDesc')}
                   </p>
                 </div>
 
                 <div className="rounded-xl border bg-muted/20 p-4">
                   <div className="flex items-center gap-2">
                     <Bot className="h-4 w-4 text-primary" />
-                    <p className="text-sm font-medium">Draft workflow</p>
+                    <p className="text-sm font-medium">{t('aiDraftSnippets.draftWorkflow')}</p>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Keep titles human-friendly and shortcuts short so the picker stays fast during
-                    live replies.
+                    {t('aiDraftSnippets.draftWorkflowDesc')}
                   </p>
                 </div>
               </div>
@@ -659,10 +661,10 @@ export function AiDraftSnippetsPage() {
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <FileText className="h-3.5 w-3.5" />
-                    Created {formatDateTime(selectedSnippet.created_at)}
+                    {t('aiDraftSnippets.createdLabel', { date: formatDateTime(t, selectedSnippet.created_at) })}
                   </span>
-                  <span>Last updated {formatDateTime(selectedSnippet.updated_at)}</span>
-                  <span>Channel {channelLabel(selectedSnippet.channel)}</span>
+                  <span>{t('aiDraftSnippets.lastUpdatedLabel', { date: formatDateTime(t, selectedSnippet.updated_at) })}</span>
+                  <span>{t('aiDraftSnippets.channelInfo', { channel: channelLabel(t, selectedSnippet.channel) })}</span>
                 </div>
               ) : null}
             </div>
@@ -673,43 +675,42 @@ export function AiDraftSnippetsPage() {
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create new snippet</DialogTitle>
+            <DialogTitle>{t('aiDraftSnippets.createNewSnippet')}</DialogTitle>
             <DialogDescription>
-              Add a shared AI draft snippet for operators. It will appear in the channel picker
-              once saved.
+              {t('aiDraftSnippets.createDialogDesc')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="new-snippet-title">Title</Label>
+                <Label htmlFor="new-snippet-title">{t('aiDraftSnippets.titleLabel')}</Label>
                 <Input
                   id="new-snippet-title"
                   value={createForm.title}
                   onChange={(event) =>
                     setCreateForm((current) => ({ ...current, title: event.target.value }))
                   }
-                  placeholder="Investigation in progress"
+                  placeholder={t('aiDraftSnippets.titlePlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="new-snippet-shortcut">Shortcut</Label>
+                <Label htmlFor="new-snippet-shortcut">{t('aiDraftSnippets.shortcutLabel')}</Label>
                 <Input
                   id="new-snippet-shortcut"
                   value={createForm.shortcut ?? ''}
                   onChange={(event) =>
                     setCreateForm((current) => ({ ...current, shortcut: event.target.value }))
                   }
-                  placeholder="investigating"
+                  placeholder={t('aiDraftSnippets.shortcutPlaceholder')}
                 />
               </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-[minmax(0,220px),1fr]">
               <div className="space-y-2">
-                <Label htmlFor="new-snippet-channel">Channel</Label>
+                <Label htmlFor="new-snippet-channel">{t('aiDraftSnippets.channelLabel')}</Label>
                 <Select
                   value={normalizeChannel(createForm.channel)}
                   onValueChange={(value) =>
@@ -720,23 +721,23 @@ export function AiDraftSnippetsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {EDITOR_CHANNELS.map((channel) => (
-                      <SelectItem key={channel} value={channel}>
-                        {channelLabel(channel)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                      {EDITOR_CHANNELS.map((channel) => (
+                        <SelectItem key={channel} value={channel}>
+                          {channelLabel(t, channel)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="rounded-xl border bg-muted/20 px-4 py-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium">Active for operators</p>
-                    <p className="text-xs text-muted-foreground">
-                      Turn this off if you want to save the snippet without exposing it yet.
-                    </p>
-                  </div>
+                <div className="rounded-xl border bg-muted/20 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">{t('aiDraftSnippets.activeForOperators')}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t('aiDraftSnippets.dialogActiveDesc')}
+                      </p>
+                    </div>
                   <Switch
                     checked={Boolean(createForm.is_active)}
                     onCheckedChange={(checked) =>
@@ -748,19 +749,19 @@ export function AiDraftSnippetsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="new-snippet-description">Description</Label>
+              <Label htmlFor="new-snippet-description">{t('aiDraftSnippets.descriptionLabel')}</Label>
               <Input
                 id="new-snippet-description"
                 value={createForm.description ?? ''}
                 onChange={(event) =>
                   setCreateForm((current) => ({ ...current, description: event.target.value }))
                 }
-                placeholder="Short note so admins know when to use this snippet"
+                placeholder={t('aiDraftSnippets.descriptionPlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="new-snippet-body">Body</Label>
+              <Label htmlFor="new-snippet-body">{t('aiDraftSnippets.bodyLabel')}</Label>
               <Textarea
                 id="new-snippet-body"
                 rows={10}
@@ -768,7 +769,7 @@ export function AiDraftSnippetsPage() {
                 onChange={(event) =>
                   setCreateForm((current) => ({ ...current, body: event.target.value }))
                 }
-                placeholder="Hi {{customer_name}}, we are investigating this now and will follow up shortly."
+                placeholder={t('aiDraftSnippets.bodyPlaceholder')}
                 className="resize-y"
               />
             </div>
@@ -784,7 +785,7 @@ export function AiDraftSnippetsPage() {
               }}
               disabled={createMut.isPending}
             >
-              Cancel
+              {t('aiDraftSnippets.cancel')}
             </Button>
             <Button type="button" onClick={handleCreate} disabled={createMut.isPending}>
               {createMut.isPending ? (
@@ -792,7 +793,7 @@ export function AiDraftSnippetsPage() {
               ) : (
                 <Plus className="mr-2 h-4 w-4" />
               )}
-              Create snippet
+              {t('aiDraftSnippets.createSnippet')}
             </Button>
           </DialogFooter>
         </DialogContent>

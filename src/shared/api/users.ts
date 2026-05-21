@@ -14,6 +14,14 @@ type ListUsersParams = {
   limit?: number;
 };
 
+type CreateUserPayload = {
+  email: string;
+  password: string;
+  full_name: string;
+  role: ManagedUserRole;
+  phone_number?: string | null;
+};
+
 type UpdateUserPayload = {
   full_name?: string;
   role?: ManagedUserRole;
@@ -59,13 +67,21 @@ function mapCurrentUser(raw: any): User {
     locale: raw?.locale ? String(raw.locale) : undefined,
     profile_picture_url: raw?.profile_picture_url ?? null,
     must_change_password: Boolean(raw?.must_change_password ?? false),
-    profile_completed: Boolean(raw?.profile_completed ?? false),
-    profile_completion_required: Boolean(raw?.profile_completion_required ?? false),
+    two_factor_enabled: Boolean(raw?.two_factor_enabled ?? false),
+    two_factor_auth: Boolean(raw?.two_factor_auth ?? false),
   };
 }
 
 export const usersApi = {
   me: async (): Promise<User> => mapCurrentUser(await apiClient<any>('/users/me')),
+
+  create: async (payload: CreateUserPayload): Promise<ManagedUser> => {
+    const response = await apiClient<any>('/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return mapManagedUser(response);
+  },
 
   list: async (params: ListUsersParams = {}): Promise<ManagedUserListResponse> => {
     const clampedLimit = params.limit !== undefined

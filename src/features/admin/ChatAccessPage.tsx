@@ -29,13 +29,13 @@ function isReadOnlyMode(user: ManagedUser) {
   return !user.can_reply_conversations || !user.can_reply_whatsapp;
 }
 
-function roleLabel(role: ManagedUserRole) {
-  if (role === 'ADMIN') return 'Admin';
-  if (role === 'AGENT') return 'Agent';
-  return 'Client';
+function roleLabel(t: (key: string) => string, role: ManagedUserRole) {
+  if (role === 'ADMIN') return t('chatAccess.adminRole');
+  if (role === 'AGENT') return t('chatAccess.agentRole');
+  return t('chatAccess.clientRole');
 }
 
-function AccessBadge({ user }: { user: ManagedUser }) {
+function AccessBadge({ user, t }: { user: ManagedUser; t: (key: string) => string }) {
   const readOnly = isReadOnlyMode(user);
 
   return (
@@ -47,7 +47,7 @@ function AccessBadge({ user }: { user: ManagedUser }) {
           : 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100',
       )}
     >
-      {readOnly ? 'Read only mode' : 'Full reply access'}
+      {readOnly ? t('chatAccess.readOnlyMode') : t('chatAccess.fullReplyAccess')}
     </Badge>
   );
 }
@@ -83,7 +83,7 @@ export function ChatAccessPage() {
       void queryClient.invalidateQueries({ queryKey: ['chat-access-controls'] });
       void queryClient.invalidateQueries({ queryKey: ['admin-users-directory'] });
       toast({
-        title: `${updated.full_name} updated`,
+        title: t('chatAccess.userUpdated', { name: updated.full_name }),
         description: t('chatAccess.replyAccessSaved'),
       });
     },
@@ -177,23 +177,23 @@ export function ChatAccessPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Operators tracked</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('chatAccess.operatorsTracked')}</p>
           <p className="mt-2 text-2xl font-semibold">{stats.total}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Full access</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('chatAccess.fullAccess')}</p>
           <p className="mt-2 text-2xl font-semibold text-emerald-600 dark:text-emerald-300">{stats.fullAccess}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Read only mode</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('chatAccess.readOnlyMode')}</p>
           <p className="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-300">{stats.readOnly}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Chat only</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('chatAccess.chatOnly')}</p>
           <p className="mt-2 text-2xl font-semibold">{stats.convOnly}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">WhatsApp only</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('chatAccess.whatsappOnly')}</p>
           <p className="mt-2 text-2xl font-semibold">{stats.waOnly}</p>
         </div>
       </div>
@@ -220,7 +220,7 @@ export function ChatAccessPage() {
                 className="h-8"
                 onClick={() => setRoleFilter(value)}
               >
-                {value === 'all' ? 'All' : value === 'AGENT' ? 'Agents' : 'Admins'}
+                {value === 'all' ? t('chatAccess.allFilter') : value === 'AGENT' ? t('chatAccess.agentsFilter') : t('chatAccess.adminsFilter')}
               </Button>
             ))}
           </div>
@@ -247,12 +247,12 @@ export function ChatAccessPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Conversations Reply</TableHead>
-                <TableHead>WhatsApp Reply</TableHead>
-                <TableHead>Mode</TableHead>
-                <TableHead className="text-right">Quick Actions</TableHead>
+                <TableHead>{t('chatAccess.user')}</TableHead>
+                <TableHead>{t('chatAccess.role')}</TableHead>
+                <TableHead>{t('chatAccess.conversationsReply')}</TableHead>
+                <TableHead>{t('chatAccess.whatsappReply')}</TableHead>
+                <TableHead>{t('chatAccess.mode')}</TableHead>
+                <TableHead className="text-right">{t('chatAccess.quickActions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -272,7 +272,7 @@ export function ChatAccessPage() {
                     <TableCell>
                       <div className="inline-flex items-center gap-2 text-sm">
                         <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                        {roleLabel(entry.role)}
+                        {roleLabel(t, entry.role)}
                       </div>
                     </TableCell>
 
@@ -287,7 +287,7 @@ export function ChatAccessPage() {
                         />
                         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                           <MessageSquare className="h-3.5 w-3.5" />
-                          {entry.can_reply_conversations ? 'Can reply' : 'Read only'}
+                          {entry.can_reply_conversations ? t('chatAccess.canReply') : t('chatAccess.readOnly')}
                         </span>
                       </div>
                     </TableCell>
@@ -303,13 +303,13 @@ export function ChatAccessPage() {
                         />
                         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                           <MessageCircle className="h-3.5 w-3.5" />
-                          {entry.can_reply_whatsapp ? 'Can reply' : 'Read only'}
+                          {entry.can_reply_whatsapp ? t('chatAccess.canReply') : t('chatAccess.readOnly')}
                         </span>
                       </div>
                     </TableCell>
 
                     <TableCell>
-                      <AccessBadge user={entry} />
+                      <AccessBadge user={entry} t={t} />
                     </TableCell>
 
                     <TableCell>
@@ -322,7 +322,7 @@ export function ChatAccessPage() {
                           onClick={() => setReadOnlyMode(entry, true)}
                         >
                           <Lock className="mr-1 h-3.5 w-3.5" />
-                          Read only
+                          {t('chatAccess.setReadOnly')}
                         </Button>
                         <Button
                           type="button"
@@ -330,7 +330,7 @@ export function ChatAccessPage() {
                           disabled={rowBusy || isSelf}
                           onClick={() => setReadOnlyMode(entry, false)}
                         >
-                          Full access
+                          {t('chatAccess.setFullAccess')}
                         </Button>
                       </div>
                     </TableCell>

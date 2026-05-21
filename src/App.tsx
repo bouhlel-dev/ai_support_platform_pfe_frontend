@@ -10,6 +10,7 @@ import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
 import { AppLayout } from '@/shared/components/AppLayout';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
+import { OtpPage } from '@/features/auth/OtpPage';
 import { LandingPage } from '@/features/landing/landingPage';
 import { Loader2 } from 'lucide-react';
 
@@ -74,6 +75,7 @@ const App = () => (
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verify-otp" element={<OtpPage />} />
               <Route path="/support-call" element={<ProtectedRoute><ClientCallPage /></ProtectedRoute>} />
               <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route path="/" element={<DashboardPage />} />

@@ -12,6 +12,28 @@ export interface AuthResponse {
   refresh_token: string;
   token_type: string;
 }
+
+export interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  two_factor_required?: boolean;
+  temp_token?: string | null;
+}
+
+export interface VerifyOtpRequest {
+  temp_token: string;
+  otp_code: string;
+}
+
+export interface SetupTwoFactorResponse {
+  secret: string;
+  qr_code_url: string;
+}
+
+export interface VerifyTwoFactorSetupRequest {
+  otp_code: string;
+}
 export interface User {
   id: string;
   email: string;
@@ -28,8 +50,8 @@ export interface User {
   locale?: string;
   profile_picture_url?: string | null;
   must_change_password?: boolean;
-  profile_completed?: boolean;
-  profile_completion_required?: boolean;
+  two_factor_enabled?: boolean;
+  two_factor_auth?: boolean;
 }
 
 export interface PublicAuthSettings {
@@ -998,7 +1020,7 @@ export interface AdminSettings {
   allow_registration: boolean;
   require_email_verification: boolean;
   two_factor_auth: boolean;
-  require_admin_profile_completion: boolean;
+
   mail_mode: MailMode;
   gmail_from_email: string;
   gmail_client_id: string;
@@ -1016,6 +1038,14 @@ export interface AdminSettings {
   notify_assigned: boolean;
   notify_overdue: boolean;
   notify_resolved: boolean;
+  sms_api_url: string;
+  sms_api_key: string;
+  sms_sender: string;
+  sms_language: string;
+  sms_notify_new_ticket: boolean;
+  sms_notify_status_change: boolean;
+  sms_notify_reply: boolean;
+  sms_notify_resolved: boolean;
   ai_auto_reply_chat_enabled: boolean;
   ai_auto_reply_whatsapp_enabled: boolean;
   ai_auto_reply_email_enabled: boolean;

@@ -37,7 +37,6 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
     } catch (err) {
       toast({ variant: 'destructive', title: t('auth.loginFailed'), description: normalizeError(err) });
     } finally {

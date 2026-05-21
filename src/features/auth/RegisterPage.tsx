@@ -72,7 +72,6 @@ export function RegisterPage() {
     setLoading(true);
     try {
       await register(email, password, name);
-      navigate('/');
     } catch (err) {
       toast({ variant: 'destructive', title: t('auth.registrationFailed'), description: normalizeError(err) });
     } finally {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { visualAiApi } from '@/shared/api/visual-ai';
@@ -29,16 +30,17 @@ import type { ScreenshotAnalysis, ReferenceScreen } from '@/shared/types';
 
 type TabId = 'analyze' | 'screenshare' | 'wizard' | 'references';
 
-const ALL_TABS: { id: TabId; label: string }[] = [
-  { id: 'analyze', label: 'Screenshot assistant' },
-  { id: 'screenshare', label: 'Live screenshare' },
-  { id: 'wizard', label: 'Troubleshooting wizard' },
-  { id: 'references', label: 'References' },
+const ALL_TABS: { id: TabId; key: string }[] = [
+  { id: 'analyze', key: 'screenshotTab' },
+  { id: 'screenshare', key: 'screenshareTab' },
+  { id: 'wizard', key: 'wizardTab' },
+  { id: 'references', key: 'referencesTab' },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function VisualAiPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -86,9 +88,9 @@ export function VisualAiPage() {
     mutationFn: async () => {
       const trimmedName = refName.trim();
       const trimmedKey = refKey.trim();
-      if (!refFile) throw new Error('Please select a reference image.');
-      if (!trimmedName) throw new Error('Reference name is required.');
-      if (!trimmedKey) throw new Error('Reference key is required.');
+      if (!refFile) throw new Error(t('visualAi.refImageRequired'));
+      if (!trimmedName) throw new Error(t('visualAi.nameRequired'));
+      if (!trimmedKey) throw new Error(t('visualAi.keyRequired'));
 
       const fd = new FormData();
       fd.append('file', refFile);
@@ -103,9 +105,9 @@ export function VisualAiPage() {
       if (trimmedExpectedElements) {
         let parsed: unknown;
         try { parsed = JSON.parse(trimmedExpectedElements); } catch {
-          throw new Error('Expected elements must be valid JSON.');
+          throw new Error(t('visualAi.elementsInvalid'));
         }
-        if (!Array.isArray(parsed)) throw new Error('Expected elements JSON must be an array.');
+        if (!Array.isArray(parsed)) throw new Error(t('visualAi.elementsNotArray'));
         fd.append('expected_elements', JSON.stringify(parsed));
       }
       return visualAiApi.references.create(fd);
@@ -115,7 +117,7 @@ export function VisualAiPage() {
       setRefExpectedOcr(''); setRefExpectedElements('');
       setRefFile(null); setRefFormError(null);
       void qc.invalidateQueries({ queryKey: ['visual-ai-refs'] });
-      toast({ title: 'Reference created' });
+      toast({ title: t('visualAi.referenceCreated') });
     },
     onError: (err) => {
       const msg = normalizeError(err);
@@ -133,7 +135,7 @@ export function VisualAiPage() {
     mutationFn: visualAiApi.references.delete,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['visual-ai-refs'] });
-      toast({ title: 'Reference deleted' });
+      toast({ title: t('visualAi.referenceDeleted') });
     },
     onError: (err) => toast({ variant: 'destructive', description: normalizeError(err) }),
   });
@@ -144,10 +146,10 @@ export function VisualAiPage() {
     <div className="mx-auto max-w-5xl p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Visual AI</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('visualAi.title')}</h1>
         {isAdmin && (
           <span className="rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 text-xs font-medium px-2.5 py-0.5">
-            Admin
+            {t('visualAi.admin')}
           </span>
         )}
       </div>
@@ -165,7 +167,7 @@ export function VisualAiPage() {
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {tab.label}
+            {t(`visualAi.${tab.key}`)}
           </button>
         ))}
       </div>
@@ -175,16 +177,16 @@ export function VisualAiPage() {
         <div className="space-y-4">
           <SectionCard>
             <p className="text-sm text-muted-foreground mb-4">
-              Upload a screenshot to get OCR text, detected UI elements, and actionable guidance.
+              {t('visualAi.screenshotDesc')}
             </p>
             <DropZone onFile={(f) => { setFile(f); setAnalysis(null); }} selectedFile={file} />
             <div className="mt-4 flex items-center gap-3">
               <Button size="sm" disabled={!file || analyzeMut.isPending} onClick={() => analyzeMut.mutate()}>
                 {analyzeMut.isPending
-                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Analyzing…</>
-                  : <><Upload className="h-3.5 w-3.5 mr-1.5" />Analyze screenshot</>}
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />{t('visualAi.analyzing')}</>
+                  : <><Upload className="h-3.5 w-3.5 mr-1.5" />{t('visualAi.analyze')}</>}
               </Button>
-              {!file && <span className="text-xs text-muted-foreground">Select an image first</span>}
+              {!file && <span className="text-xs text-muted-foreground">{t('visualAi.selectImageFirst')}</span>}
             </div>
           </SectionCard>
           {analysis && <AnalysisResult analysis={analysis} previewUrl={filePreviewUrl} />}
@@ -196,8 +198,7 @@ export function VisualAiPage() {
         <div className="space-y-4">
           <SectionCard>
             <p className="text-sm text-muted-foreground">
-              Use this mode during a live user session to analyze frame captures and receive
-              step-by-step assistance hints.
+              {t('visualAi.screenshareDesc')}
             </p>
           </SectionCard>
           <VisualAiScreenshareTab />
@@ -209,7 +210,7 @@ export function VisualAiPage() {
         <div className="space-y-4">
           <SectionCard>
             <p className="text-sm text-muted-foreground">
-              Generate a guided troubleshooting flow from the user goal and current on-screen context.
+              {t('visualAi.wizardDesc')}
             </p>
           </SectionCard>
           <VisualAiTroubleshootingWizardTab />
@@ -249,6 +250,7 @@ function ReferencesTab({
   createRefMut,
   deleteMut,
 }: any) {
+  const { t } = useTranslation();
   const canCreate = !createRefMut.isPending && refFile && refName.trim() && refKey.trim();
 
   return (
@@ -257,35 +259,35 @@ function ReferencesTab({
       {/* ── Create form ── */}
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="px-4 py-3.5 border-b">
-          <p className="text-sm font-medium">New reference screen</p>
+          <p className="text-sm font-medium">{t('visualAi.newReference')}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Reference screens are matched against live captures during support sessions.
+            {t('visualAi.referencesDesc')}
           </p>
         </div>
 
         <div className="p-4">
           {/* Identity */}
           <div className="space-y-3 mb-4">
-            <FormField label="Name">
+            <FormField label={t('visualAi.name')}>
               <Input
                 value={refName}
                 onChange={(e) => { setRefName(e.target.value); setRefFormError(null); }}
-                placeholder="Checkout confirmation screen"
+                placeholder={t('visualAi.namePlaceholder')}
               />
             </FormField>
-            <FormField label="Screen key" hint="slug">
+            <FormField label={t('visualAi.screenKey')} hint={t('visualAi.slugHint')}>
               <Input
                 value={refKey}
                 onChange={(e) => { setRefKey(e.target.value); setRefFormError(null); }}
-                placeholder="checkout_confirmation"
+                placeholder={t('visualAi.keyPlaceholder')}
                 className="font-mono text-sm"
               />
             </FormField>
-            <FormField label="Description" optional>
+            <FormField label={t('visualAi.description')} optional>
               <Input
                 value={refDescription}
                 onChange={(e) => setRefDescription(e.target.value)}
-                placeholder="Expected page after successful checkout"
+                placeholder={t('visualAi.descPlaceholder')}
               />
             </FormField>
           </div>
@@ -295,20 +297,20 @@ function ReferencesTab({
           {/* Matching hints */}
           <div className="space-y-3 mb-4">
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Matching hints
+              {t('visualAi.matchingHints')}
             </p>
-            <FormField label="Expected OCR text" optional>
+            <FormField label={t('visualAi.expectedOcr')} optional>
               <Input
                 value={refExpectedOcr}
                 onChange={(e) => setRefExpectedOcr(e.target.value)}
-                placeholder="Order confirmed"
+                placeholder={t('visualAi.ocrPlaceholder')}
               />
             </FormField>
-            <FormField label="Expected elements" optional hint="JSON array">
+            <FormField label={t('visualAi.expectedElements')} optional hint={t('visualAi.jsonArray')}>
               <Textarea
                 value={refExpectedElements}
                 onChange={(e) => { setRefExpectedElements(e.target.value); setRefFormError(null); }}
-                placeholder={'[{"type":"BUTTON","label":"Continue"}]'}
+                placeholder={t('visualAi.elementsPlaceholder')}
                 rows={2}
                 className="font-mono text-xs resize-none"
               />
@@ -320,7 +322,7 @@ function ReferencesTab({
           {/* Image upload */}
           <div className="mb-4">
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
-              Reference image
+              {t('visualAi.referenceImage')}
             </p>
             <DropZone
               onFile={(f: File) => { setRefFile(f); setRefFormError(null); }}
@@ -343,8 +345,8 @@ function ReferencesTab({
             onClick={() => createRefMut.mutate()}
           >
             {createRefMut.isPending
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Creating…</>
-              : <><Plus className="h-3.5 w-3.5" />Create reference</>}
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />{t('visualAi.creating')}</>
+              : <><Plus className="h-3.5 w-3.5" />{t('visualAi.createReference')}</>}
           </Button>
         </div>
       </div>
@@ -352,10 +354,10 @@ function ReferencesTab({
       {/* ── List ── */}
       <div className="rounded-xl border bg-card overflow-hidden self-start">
         <div className="flex items-center justify-between px-4 py-3.5 border-b">
-          <p className="text-sm font-medium">Saved references</p>
+          <p className="text-sm font-medium">{t('visualAi.savedReferences')}</p>
           {refs?.length ? (
             <span className="text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5">
-              {refs.length} {refs.length === 1 ? 'screen' : 'screens'}
+              {refs.length}
             </span>
           ) : null}
         </div>
@@ -370,9 +372,9 @@ function ReferencesTab({
               <Monitor className="h-5 w-5 text-muted-foreground/50" />
             </div>
             <div>
-              <p className="text-sm font-medium">No references yet</p>
+              <p className="text-sm font-medium">{t('visualAi.noReferences')}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Create your first reference screen using the form.
+                {t('visualAi.noReferencesHint')}
               </p>
             </div>
           </div>
@@ -422,7 +424,7 @@ function ReferencesTab({
                   )}
                   disabled={deleteMut.isPending}
                   onClick={() => deleteMut.mutate(r.id)}
-                  aria-label={`Delete ${r.name}`}
+                  aria-label={t('visualAi.deleteLabel', { name: r.name })}
                 >
                   {deleteMut.isPending
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -454,12 +456,13 @@ function FormField({
   hint?: string;
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
         {label}
         {hint && <span className="font-mono font-normal opacity-50 text-[10px]">({hint})</span>}
-        {optional && <span className="font-normal opacity-50">(optional)</span>}
+        {optional && <span className="font-normal opacity-50">{t('visualAi.referenceOptional')}</span>}
       </Label>
       {children}
     </div>
@@ -475,6 +478,7 @@ function DropZone({
   selectedFile: File | null;
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -521,10 +525,9 @@ function DropZone({
         <div className={cn('flex flex-col items-center gap-1 text-center', compact && 'gap-0.5')}>
           <Upload className={cn('text-muted-foreground/50', compact ? 'h-4 w-4' : 'h-6 w-6')} />
           <p className="text-sm text-muted-foreground">
-            Drop an image or{' '}
-            <span className="text-violet-600 dark:text-violet-400 font-medium">browse</span>
+            {t('visualAi.dropImage')}
           </p>
-          {!compact && <p className="text-xs text-muted-foreground/60">PNG, JPG, WEBP</p>}
+          {!compact && <p className="text-xs text-muted-foreground/60">{t('visualAi.imageFormats')}</p>}
         </div>
       )}
     </div>
@@ -540,6 +543,7 @@ function AnalysisResult({
   analysis: ScreenshotAnalysis;
   previewUrl?: string | null;
 }) {
+  const { t } = useTranslation();
   const confidencePct =
     typeof analysis.confidence === 'number'
       ? `${Math.round(Math.max(0, Math.min(1, analysis.confidence)) * 100)}%`
@@ -554,7 +558,7 @@ function AnalysisResult({
           ) : (
             <div className="flex flex-col items-center gap-1 text-muted-foreground/40">
               <ImageIcon className="h-6 w-6" />
-              <span className="text-xs">No preview</span>
+              <span className="text-xs">{t('visualAi.noPreview')}</span>
             </div>
           )}
         </div>
@@ -562,9 +566,9 @@ function AnalysisResult({
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-2">
             {[
-              { label: 'Provider', value: analysis.provider || 'gemini' },
-              { label: 'Confidence', value: confidencePct },
-              { label: 'Latency', value: typeof analysis.processing_ms === 'number' ? `${analysis.processing_ms} ms` : 'N/A' },
+              { label: t('visualAi.provider'), value: analysis.provider || 'gemini' },
+              { label: t('visualAi.confidence'), value: confidencePct },
+              { label: t('visualAi.latency'), value: typeof analysis.processing_ms === 'number' ? `${analysis.processing_ms} ms` : 'N/A' },
             ].map((m) => (
               <div key={m.label} className="rounded-md bg-muted/40 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{m.label}</p>
@@ -574,14 +578,14 @@ function AnalysisResult({
           </div>
 
           <div>
-            <SectionLabel>Caption</SectionLabel>
+            <SectionLabel>{t('visualAi.noCaption')}</SectionLabel>
             <p className="text-sm leading-relaxed text-muted-foreground mt-1">
-              {analysis.caption || 'No caption detected.'}
+              {analysis.caption || t('visualAi.noCaption')}
             </p>
           </div>
 
           <div>
-            <SectionLabel>Labels</SectionLabel>
+            <SectionLabel>{t('visualAi.noLabels')}</SectionLabel>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {analysis.labels.length
                 ? analysis.labels.map((l, i) => (
@@ -589,29 +593,29 @@ function AnalysisResult({
                       {l}
                     </span>
                   ))
-                : <span className="text-xs text-muted-foreground">No labels detected.</span>}
+                : <span className="text-xs text-muted-foreground">{t('visualAi.noLabels')}</span>}
             </div>
           </div>
         </div>
       </div>
 
       <div>
-        <SectionLabel>OCR text</SectionLabel>
+        <SectionLabel>{t('visualAi.noOcr')}</SectionLabel>
         <pre className="mt-1 rounded-md bg-muted/40 px-3 py-2 text-xs font-mono whitespace-pre-wrap leading-relaxed text-muted-foreground">
-          {analysis.ocr_text || 'No OCR text detected.'}
+          {analysis.ocr_text || t('visualAi.noOcr')}
         </pre>
       </div>
 
       {analysis.ui_elements && analysis.ui_elements.length > 0 && (
         <div>
-          <SectionLabel>Detected elements ({analysis.ui_elements.length})</SectionLabel>
+          <SectionLabel>{t('visualAi.detectedElements', { count: analysis.ui_elements.length })}</SectionLabel>
           <div className="mt-1 rounded-md border overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-muted/30">
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Type</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Label</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Confidence</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">{t('visualAi.type')}</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">{t('visualAi.label')}</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">{t('visualAi.confidence')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -632,10 +636,10 @@ function AnalysisResult({
 
       {analysis.regions && analysis.regions.length > 0 && (
         <div>
-          <SectionLabel>Detected regions</SectionLabel>
+          <SectionLabel>{t('visualAi.detectedRegions')}</SectionLabel>
           <ul className="mt-1 space-y-1">
             {analysis.regions.map((r: any, i: number) => (
-              <li key={i} className="text-xs text-muted-foreground">{r.description || 'Unnamed region'}</li>
+              <li key={i} className="text-xs text-muted-foreground">{r.description || t('visualAi.unnamedRegion')}</li>
             ))}
           </ul>
         </div>
@@ -643,7 +647,7 @@ function AnalysisResult({
 
       {analysis.guidance.length > 0 && (
         <div>
-          <SectionLabel>Guidance</SectionLabel>
+          <SectionLabel>{t('visualAi.guidance')}</SectionLabel>
           <ul className="mt-1 space-y-1.5">
             {analysis.guidance.map((g: string, i: number) => (
               <li key={i} className="flex items-start gap-2 text-sm">
@@ -657,7 +661,7 @@ function AnalysisResult({
 
       {analysis.gaps && analysis.gaps.length > 0 && (
         <div>
-          <SectionLabel className="text-destructive">Gaps detected</SectionLabel>
+          <SectionLabel className="text-destructive">{t('visualAi.gapsDetected')}</SectionLabel>
           <ul className="mt-1 space-y-1.5">
             {analysis.gaps.map((g: string, i: number) => (
               <li key={i} className="flex items-start gap-2 text-sm text-destructive">
@@ -671,7 +675,7 @@ function AnalysisResult({
 
       <details className="rounded-md border bg-muted/20 p-3">
         <summary className="cursor-pointer text-xs font-medium text-muted-foreground select-none">
-          Raw provider payload
+          {t('visualAi.rawPayload')}
         </summary>
         <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded bg-background p-2 text-[11px] font-mono leading-relaxed">
           {JSON.stringify(analysis.raw_result ?? {}, null, 2)}

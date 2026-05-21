@@ -11,7 +11,7 @@ import {
 import {
   LayoutDashboard, Ticket, MessageSquare, Mail, MessageCircle,
   Settings, LogOut, QrCode,
-  AlertTriangle, Phone, PhoneCall, ShieldCheck, Users, ScrollText, UserRound, Bell, SlidersHorizontal, FileText, Eye,
+  AlertTriangle, Phone, PhoneCall, ShieldCheck, Users, ScrollText, UserRound, Bell, Brain, FileText, Eye, Mic, Layers, Camera, Database,
 } from 'lucide-react';
 import { usersApi } from '@/shared/api/users';
 import { useTranslation } from 'react-i18next';
@@ -20,10 +20,6 @@ import { isRtlLanguage } from '@/shared/i18n/DirectionSync';
 const operatorNavItems = [
   { titleKey: 'common.dashboard', url: '/', icon: LayoutDashboard },
   { titleKey: 'common.tickets', url: '/tickets', icon: Ticket },
-  { titleKey: 'common.conversations', url: '/conversations', icon: MessageSquare },
-  { titleKey: 'common.emailChannel', url: '/email', icon: Mail },
-  { titleKey: 'common.whatsapp', url: '/whatsapp', icon: MessageCircle },
-  { titleKey: 'common.escalations', url: '/escalations', icon: AlertTriangle },
   { titleKey: 'common.voiceCallTranscripts', url: '/voice-calls', icon: PhoneCall },
   { titleKey: 'common.notifications', url: '/notifications', icon: Bell },
 ];
@@ -44,7 +40,9 @@ const adminItems = [
   { titleKey: 'common.qrBridge', url: '/qr', icon: QrCode },
   { titleKey: 'common.voiceAgentsRuntime', url: '/voice-agents', icon: Phone },
   { titleKey: 'common.aiDraftSnippets', url: '/ai-draft-snippets', icon: FileText },
-  { titleKey: 'common.decisionConfig', url: '/decisions/config', icon: SlidersHorizontal },
+  { titleKey: 'common.decisionEngine', url: '/decisions', icon: Brain },
+  { titleKey: 'common.visualAi', url: '/visual-ai', icon: Camera },
+  { titleKey: 'common.rag', url: '/rag', icon: Database },
   { titleKey: 'common.logsAudit', url: '/logs', icon: ScrollText },
   { titleKey: 'common.settings', url: '/settings', icon: Settings },
 ];
@@ -70,6 +68,10 @@ export function AppSidebar() {
   return (
     <Sidebar side={isRtl ? 'right' : 'left'} collapsible="icon" className={isRtl ? 'border-l-0' : 'border-r-0'}>
       <SidebarContent className="bg-sidebar">
+        <div className="flex flex-col items-center justify-center gap-1 px-3 py-4 border-b border-sidebar-border">
+          <img src="/logo-l2t.png" alt="L2T" className="h-8 w-auto object-contain" />
+          {!collapsed && <span className="text-xs font-medium text-white/80">{t('shell.appName')}</span>}
+        </div>
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
             {!collapsed && t('shell.supportOps')}
@@ -96,29 +98,65 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {user?.role === 'admin' && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
-              {!collapsed && t('shell.admin')}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {translatedAdminItems.map(item => (
-                  <SidebarMenuItem key={item.url}>
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
+                {!collapsed && 'Voice'}
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem key="/voice-agents">
                     <SidebarMenuButton asChild>
                       <NavLink
-                        to={item.url}
+                        to="/voice-agents"
                         className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
                       >
-                        <item.icon className="h-4 w-4 me-2 shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
+                        <Phone className="h-4 w-4 me-2 shrink-0" />
+                        {!collapsed && <span>{t('common.voiceAgentsRuntime')}</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                  <SidebarMenuItem key="/test-agent">
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to="/test-agent"
+                        className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      >
+                        <Mic className="h-4 w-4 me-2 shrink-0" />
+                        {!collapsed && <span>{t('common.testVoiceAgent')}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
+                {!collapsed && t('shell.admin')}
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {translatedAdminItems.filter(item => item.url !== '/voice-agents').map(item => (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                        >
+                          <item.icon className="h-4 w-4 me-2 shrink-0" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
         )}
       </SidebarContent>
 

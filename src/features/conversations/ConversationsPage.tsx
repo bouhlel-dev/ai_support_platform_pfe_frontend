@@ -66,6 +66,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/features/auth/AuthContext';
@@ -133,7 +134,6 @@ function formatSlaCountdown(totalSeconds: number) {
   if (minutes > 0) return `${minutes}m`;
   return `${seconds}s`;
 }
-
 function formatPauseUntilLabel(value: string | null | undefined) {
   if (!value) return 'not scheduled';
   const date = new Date(value);
@@ -1198,6 +1198,7 @@ function OperatorMessageThread({
 // ─── Client conversations page ────────────────────────────────────────────────
 
 function ClientConversationsPage() {
+  const [showAllConversations, setShowAllConversations] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -1751,17 +1752,160 @@ function ClientConversationsPage() {
   const showPreparingResponse = pendingResponse?.conversationId === selectedId && (pendingResponse.mode === 'poll' || !deferredStreamingAssistantMessage || !deferredStreamingAssistantMessage.content.trim());
   const ownSenderIds = useMemo(() => { const ids = new Set<string>(); if (user?.id) ids.add(user.id); if (selectedConversation?.user_id) ids.add(selectedConversation.user_id); return ids; }, [selectedConversation?.user_id, user?.id]);
 
+  const renderSidebarPanel = (inSheet: boolean) => (
+    <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', !inSheet && 'rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl transition-all duration-300 ease-in-out', !inSheet && (sidebarOpen ? 'translate-x-0 scale-100 opacity-100 visible' : '-translate-x-6 scale-95 opacity-0 invisible'))}>
+      <div className="px-4 pt-4 pb-0">
+        <div className="flex items-center justify-between pb-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Support chat</p>
+          {!inSheet && (
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-full border border-border/70" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+        <Button type="button" className="w-full h-9 rounded-lg text-sm font-medium mb-3" onClick={handleCreateNewChat}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          New chat
+        </Button>
+        <div className="relative mb-3">
+          <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Input type="text" placeholder="Search conversations…" className="h-8 pl-8 pr-3 text-xs rounded-lg border-border/50 bg-background/50" />
+        </div>
+      </div>
+      <div className="h-px bg-border/50"></div>
+      <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]]:overflow-x-hidden">
+        <div className="px-2 py-2 pr-4">
+          {displayedConversations.some((c) => isConversationPinned(c)) && (
+            <>
+              <div className="px-2 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">Pinned</div>
+              <div className="space-y-0.5">
+                {displayedConversations.filter((c) => isConversationPinned(c)).map((conversation) => {
+                  const isActive = selectedId === conversation.id && !startingFresh;
+                  const conversationTitle = getConversationTitle(conversation);
+                  return (
+                    <div key={conversation.id} role="button" tabIndex={0} onClick={() => handleSelectConversation(conversation.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectConversation(conversation.id); } }}
+                      className={cn('group relative w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors', isActive ? 'bg-muted' : 'hover:bg-muted/50')}>
+                      {isActive && <div className="absolute left-0 top-1/4 bottom-1/4 w-0.5 rounded-r bg-blue-600"></div>}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{truncateSidebarTitle(conversationTitle)}</p>
+                        <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{formatConversationDate(conversation.updated_at)}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); startInlineRenameConversation(conversation); }}>
+                              <Pencil className="mr-2 h-3.5 w-3.5" />Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleTogglePinConversation(conversation); }}>
+                              <PinOff className="mr-2 h-3.5 w-3.5" />Unpin
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onSelect={(e) => { e.preventDefault(); openDeleteConversationCard(conversation); }}>
+                              <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          {conversationsLoading ? (
+            <div className="p-2"><TableSkeleton rows={4} cols={1} /></div>
+          ) : conversationsError ? (
+            <ErrorState message={normalizeError(conversationsError)} onRetry={() => refetchConversations()} />
+          ) : displayedConversations.length === 0 ? (
+            <div className="px-4 py-8 text-center text-xs text-muted-foreground">No conversations yet</div>
+          ) : (
+            <>
+              {displayedConversations.some((c) => !isConversationPinned(c)) && (
+                <div className="px-2 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/60 mt-2">Recent</div>
+              )}
+              <div className="space-y-0.5">
+                {displayedConversations.filter((c) => !isConversationPinned(c)).map((conversation) => {
+                  const isActive = selectedId === conversation.id && !startingFresh;
+                  const conversationTitle = getConversationTitle(conversation);
+                  const isRenaming = renamingConversationId === conversation.id;
+                  return (
+                    <div key={conversation.id}>
+                      {isRenaming ? (
+                        <div className="px-2 py-2">
+                          <Input value={renameDraft} onChange={(e) => { setRenameDraft(e.target.value); if (renameError) setRenameError(null); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleRenameConversation(conversation, renameDraft); } else if (e.key === 'Escape') { e.preventDefault(); cancelInlineRenameConversation(); } }}
+                            placeholder={conversationTitle} autoFocus className="h-7 text-xs" />
+                          {renameError && <p className="mt-1 text-xs text-destructive">{renameError}</p>}
+                        </div>
+                      ) : (
+                    <div role="button" tabIndex={0} onClick={() => handleSelectConversation(conversation.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectConversation(conversation.id); } }}
+                      className={cn('group relative w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors', isActive ? 'bg-muted' : 'hover:bg-muted/50')}>
+                          {isActive && <div className="absolute left-0 top-1/4 bottom-1/4 w-0.5 rounded-r bg-blue-600"></div>}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">{truncateSidebarTitle(conversationTitle)}</p>
+                            <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{formatConversationDate(conversation.updated_at)}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); startInlineRenameConversation(conversation); }}>
+                                  <Pencil className="mr-2 h-3.5 w-3.5" />Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleTogglePinConversation(conversation); }}>
+                                  <Pin className="mr-2 h-3.5 w-3.5" />Pin
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive" onSelect={(e) => { e.preventDefault(); openDeleteConversationCard(conversation); }}>
+                                  <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                  </div>
+                </div>
+              )}
+            </div>
+              );
+              })}
+              {displayedConversations.length > 20 && (
+                <div className="px-2 pt-1">
+                  <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAllConversations((v) => !v)}>
+                    {showAllConversations ? 'Show less' : `Show ${displayedConversations.length - 20} more`}
+                  </Button>
+                </div>
+              )}
+              </div>
+            </>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
   return (
     <div className="flex h-[calc(100vh-3rem)] overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.10),_transparent_40%),linear-gradient(180deg,_rgba(255,255,255,0.97),_rgba(248,250,252,0.98))] dark:bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,1))]">
-      <aside aria-hidden={!sidebarOpen} className={cn('hidden min-h-0 shrink-0 overflow-hidden transition-all duration-300 ease-in-out md:flex md:flex-col', sidebarOpen ? 'w-80 p-3 opacity-100' : 'w-0 p-0 opacity-0 pointer-events-none')}>
-        <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl transition-all duration-300 ease-in-out', sidebarOpen ? 'translate-x-0 scale-100 opacity-100 visible' : '-translate-x-6 scale-95 opacity-0 invisible')}>
+
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      <aside aria-hidden={!sidebarOpen} className={cn('fixed inset-y-0 left-0 z-40 flex w-[min(320px,85vw)] flex-col transition-transform duration-300 ease-in-out md:static md:z-auto md:w-72 md:translate-x-0 md:transition-none md:p-3 2xl:w-80', sidebarOpen ? 'translate-x-0' : '-translate-x-full')}>
+        <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden bg-card/80 backdrop-blur-xl md:rounded-2xl md:border md:border-border/50')}>
           {/* Header */}
           <div className="px-4 pt-4 pb-0">
             <div className="flex items-center justify-between pb-3">
-              <div className="flex items-center gap-1.5">
-                <div className="h-1.5 w-1.5 rounded-full bg-blue-600 shrink-0"></div>
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Support chat</p>
-              </div>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Support chat</p>
               <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-full border border-border/70" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
                 <X className="h-3 w-3" />
               </Button>
@@ -1801,9 +1945,12 @@ function ClientConversationsPage() {
                         const isActive = selectedId === conversation.id && !startingFresh;
                         const conversationTitle = getConversationTitle(conversation);
                         return (
-                          <button
+                          <div
                             key={conversation.id}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => handleSelectConversation(conversation.id)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectConversation(conversation.id); } }}
                             className={cn(
                               'group relative w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors',
                               isActive ? 'bg-muted' : 'hover:bg-muted/50',
@@ -1811,11 +1958,10 @@ function ClientConversationsPage() {
                           >
                             {isActive && <div className="absolute left-0 top-1/4 bottom-1/4 w-0.5 rounded-r bg-blue-600"></div>}
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-foreground truncate">{conversationTitle}</p>
+                              <p className="text-sm font-medium text-foreground truncate">{truncateSidebarTitle(conversationTitle)}</p>
                               <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{formatConversationDate(conversation.updated_at)}</p>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <Pin className="h-2.5 w-2.5 text-muted-foreground/60" />
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
@@ -1843,7 +1989,7 @@ function ClientConversationsPage() {
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
                   </div>
@@ -1897,8 +2043,11 @@ function ClientConversationsPage() {
                                 {renameError && <p className="mt-1 text-xs text-destructive">{renameError}</p>}
                               </div>
                             ) : (
-                              <button
+                              <div
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => handleSelectConversation(conversation.id)}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectConversation(conversation.id); } }}
                                 className={cn(
                                   'group relative w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors',
                                   isActive ? 'bg-muted' : 'hover:bg-muted/50',
@@ -1906,7 +2055,7 @@ function ClientConversationsPage() {
                               >
                                 {isActive && <div className="absolute left-0 top-1/4 bottom-1/4 w-0.5 rounded-r bg-blue-600"></div>}
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-foreground truncate">{conversationTitle}</p>
+                                  <p className="text-sm font-medium text-foreground truncate">{truncateSidebarTitle(conversationTitle)}</p>
                                   <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{formatConversationDate(conversation.updated_at)}</p>
                                 </div>
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1937,7 +2086,7 @@ function ClientConversationsPage() {
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </div>
-                              </button>
+                              </div>
                             )}
                           </div>
                         );
@@ -1951,38 +2100,34 @@ function ClientConversationsPage() {
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="relative border-b border-border/70 bg-background/84 px-4 py-3 backdrop-blur">
-          {!sidebarOpen && (
-            <Button type="button" variant="ghost" size="icon" className="absolute left-4 top-3 hidden h-9 w-9 rounded-full md:inline-flex" onClick={() => setSidebarOpen(true)} aria-label="Expand sidebar"><Menu className="h-4 w-4" /></Button>
-          )}
-          <div className="mx-auto flex max-w-5xl flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">{introMode ? 'Start a fresh conversation' : getConversationTitle(selectedConversation)}</h1>
-              {conversationsRefreshing && <span className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Syncing</span>}
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Ask a question, follow up on an existing ticket, or keep the discussion going in a single thread.</p>
+        <header className="relative border-b border-border/70 bg-background/84 px-3 py-3 backdrop-blur sm:px-4">
+          <div className="mx-auto flex max-w-5xl items-center gap-3">
+            <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full md:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open conversations"><Menu className="h-4 w-4" /></Button>
+            {!sidebarOpen && (
+              <Button type="button" variant="ghost" size="icon" className="hidden h-9 w-9 rounded-full md:inline-flex" onClick={() => setSidebarOpen(true)} aria-label="Expand sidebar"><Menu className="h-4 w-4" /></Button>
+            )}
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-base font-semibold tracking-tight text-foreground sm:text-2xl">{introMode ? 'New conversation' : getConversationTitle(selectedConversation)}</h1>
+              <p className="mt-0.5 hidden max-w-2xl text-sm text-muted-foreground sm:block">Ask a question, follow up on an existing ticket, or keep the discussion going.</p>
+              {conversationsRefreshing && <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />Syncing</span>}
             </div>
             <div className="hidden flex-nowrap items-center justify-end gap-2 md:flex">
               <Button type="button" variant="outline" className={CLIENT_ACTION_BUTTON_CLASS} onClick={() => navigate('/support-call')}><PhoneCall className="mr-2 h-4 w-4" />Start call</Button>
               <Button type="button" variant="secondary" className={CLIENT_ACTION_BUTTON_CLASS} onClick={handleCreateNewChat}><Plus className="mr-2 h-4 w-4" />New chat</Button>
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full md:hidden"><MoreHorizontal className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onSelect={handleCreateNewChat}><Plus className="mr-2 h-4 w-4" />New chat</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate('/support-call')}><PhoneCall className="mr-2 h-4 w-4" />Start call</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <div className="mx-auto mt-3 max-w-5xl md:hidden">
-            <ScrollArea className="w-full whitespace-nowrap">
-              <div className="flex items-stretch gap-2 pb-1">
-                <Button type="button" variant="secondary" className={CLIENT_ACTION_BUTTON_CLASS} onClick={() => navigate('/support-call')}><PhoneCall className="mr-2 h-4 w-4" />Start call</Button>
-                <Button type="button" variant={startingFresh || !selectedId ? 'default' : 'secondary'} className={CLIENT_ACTION_BUTTON_CLASS} onClick={handleCreateNewChat}><Plus className="mr-2 h-4 w-4" />New chat</Button>
-                {displayedConversations.map((conversation) => (
-                  <Button key={conversation.id} type="button" variant={selectedId === conversation.id && !startingFresh ? 'default' : 'secondary'} className="rounded-full" onClick={() => handleSelectConversation(conversation.id)}>
-                    {isConversationPinned(conversation) && <Pin className="mr-1 h-3.5 w-3.5" />}
-                    {getConversationTitle(conversation)}
-                  </Button>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-          {screenShareError && <p className="mx-auto mt-2 max-w-5xl text-xs text-rose-600">{screenShareError}</p>}
+          {screenShareError && <p className="mx-auto mt-2 max-w-5xl truncate text-xs text-rose-600 max-sm:px-4">{screenShareError}</p>}
           {isScreenSharing && (
-            <p className="mx-auto mt-2 max-w-5xl text-xs text-muted-foreground">
+            <p className="mx-auto mt-2 max-w-5xl truncate text-xs text-muted-foreground max-sm:px-4">
               Live screen analysis - frame #{Math.max(1, screenFrameNumber)}{lastScreenAnalysisAt ? ` - updated ${formatScreenShareStatusTime(lastScreenAnalysisAt)}` : ''}{isAnalyzingScreen ? ' - analyzing...' : ''}{screenAnalysisText ? ` - ${screenAnalysisText}` : ''}
             </p>
           )}
@@ -2003,9 +2148,9 @@ function ClientConversationsPage() {
                 {messagesLoading ? (
                   <TableSkeleton rows={6} cols={1} />
                 ) : renderedMessages.length === 0 ? (
-                  <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-dashed border-border/70 bg-card/70 px-8 py-12 text-center">
-                    <MessageSquareText className="h-10 w-10 text-muted-foreground" />
-                    <h3 className="mt-4 text-lg font-semibold">No replies yet</h3>
+                  <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-dashed border-border/70 bg-card/70 px-6 py-10 text-center sm:px-8 sm:py-12">
+                    <MessageSquareText className="h-8 w-8 text-muted-foreground sm:h-10 sm:w-10" />
+                    <h3 className="mt-3 text-base font-semibold sm:mt-4 sm:text-lg">No replies yet</h3>
                     <p className="mt-2 text-sm text-muted-foreground">This thread is open. Send the next message below and keep the conversation moving.</p>
                   </div>
                 ) : (
@@ -2020,9 +2165,9 @@ function ClientConversationsPage() {
           )}
         </div>
 
-        <div className="bg-transparent px-4 pb-4 pt-3">
+        <div className="bg-transparent px-4 pb-4 pt-3" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
           <div className="mx-auto max-w-5xl">
-            <div className="rounded-[1.75rem] border border-border/50 bg-card/70 p-2.5 shadow-[0_24px_70px_-44px_rgba(15,23,42,0.7)] backdrop-blur-xl">
+            <div className="rounded-[1.75rem] border border-border/50 bg-card/70 p-2 shadow-[0_24px_70px_-44px_rgba(15,23,42,0.7)] backdrop-blur-xl sm:p-2.5">
               <input ref={attachmentInputRef} type="file" className="hidden" accept="image/*,audio/*,.pdf,.txt,.doc,.docx,.csv,.xls,.xlsx" onChange={handleAttachmentPicked} />
               {selectedAttachment && (
                 <div className="mb-2 flex items-center justify-between gap-3 rounded-[1.1rem] border border-border/50 bg-background/60 px-3 py-2 backdrop-blur-sm">
@@ -2063,9 +2208,9 @@ function ClientConversationsPage() {
 
 function AiPreparingResponseBubble() {
   return (
-    <div className="flex items-center gap-3 justify-start">
-      <Avatar className="h-10 w-10 border border-border/70 bg-background shadow-sm">
-        <AvatarFallback className="bg-secondary/85 text-secondary-foreground"><Loader2 className="h-4 w-4 animate-spin" /></AvatarFallback>
+    <div className="flex items-center gap-2 justify-start sm:gap-3">
+      <Avatar className="h-8 w-8 border border-border/70 bg-background shadow-sm sm:h-10 sm:w-10">
+        <AvatarFallback className="bg-secondary/85 text-secondary-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin sm:h-4 sm:w-4" /></AvatarFallback>
       </Avatar>
       <div className="max-w-[min(32rem,88%)] py-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -2088,9 +2233,9 @@ function ClientConversationIntro({ userName, onStartPrompt, isPending }: { userN
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
       <div className="max-w-2xl">
         <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Welcome back, {userName.split(' ')[0]}.</h2>
-        <p className="mt-3 text-base leading-7 text-muted-foreground">This interface is designed to feel like a focused chat workspace: your history on the left, the current thread in the center, and one composer for every follow-up.</p>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">This interface is designed to feel like a focused chat workspace: your history on the left, the current thread in the center, and one composer for every follow-up.</p>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         {CLIENT_STARTERS.map((prompt) => (
           <button key={prompt} type="button" onClick={() => onStartPrompt(prompt)} disabled={isPending} className="rounded-[1.4rem] border border-border/70 bg-card/80 p-4 text-left transition-transform hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground"><Sparkles className="h-4 w-4 text-primary" />Try this</div>
@@ -2112,12 +2257,12 @@ function ClientMessageBubble({ message, isOwn, isStreaming = false }: { message:
   return (
     <div className={cn('flex items-end gap-3', isOwn ? 'justify-end' : 'justify-start')}>
       {!isOwn && (
-        <Avatar className="h-10 w-10 border border-border/70 bg-background">
-          <AvatarFallback className="bg-secondary text-secondary-foreground"><Bot className="h-4 w-4" /></AvatarFallback>
+        <Avatar className="h-8 w-8 border border-border/70 bg-background sm:h-10 sm:w-10">
+          <AvatarFallback className="bg-secondary text-secondary-foreground"><Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></AvatarFallback>
         </Avatar>
       )}
       <div className={cn('max-w-[min(46rem,88%)]', isOwn ? 'items-end' : 'items-start')}>
-        <div className={cn('mb-2 flex items-center gap-2 text-xs text-muted-foreground', isOwn ? 'justify-end' : 'justify-start')}>
+        <div className={cn('mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-2 sm:gap-2', isOwn ? 'justify-end' : 'justify-start')}>
           <span className="font-medium text-foreground">{isOwn ? 'You' : 'Support'}</span>
           <span>·</span>
           <span>{formatMessageTime(message.created_at)}</span>
@@ -2126,10 +2271,10 @@ function ClientMessageBubble({ message, isOwn, isStreaming = false }: { message:
           {audioOnlyMessage ? (
             <MessageAttachmentPreview message={message} isOwn={isOwn} standalone />
           ) : (
-            <div className={cn('flex flex-col gap-3', isOwn ? 'items-end' : 'items-start')}>
+            <div className={cn('flex flex-col gap-2', isOwn ? 'items-end' : 'items-start')}>
               {showStandaloneAttachment && <MessageAttachmentPreview message={message} isOwn={isOwn} standalone />}
               {showTextBubble && (
-                <div className={cn('whitespace-pre-wrap rounded-[1.6rem] px-4 py-3 text-sm leading-7 shadow-sm', isOwn ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border/70 bg-card/90 text-foreground')}>
+                <div className={cn('whitespace-pre-wrap rounded-[1.6rem] px-3.5 py-2.5 text-sm leading-6 shadow-sm sm:px-4 sm:py-3 sm:leading-7', isOwn ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border/70 bg-card/90 text-foreground')}>
                   <div>
                     {resolvedTextContent}
                     {isStreaming && <span className="ml-1 inline-block animate-pulse align-baseline opacity-60">|</span>}
@@ -2142,8 +2287,8 @@ function ClientMessageBubble({ message, isOwn, isStreaming = false }: { message:
         </div>
       </div>
       {isOwn && (
-        <Avatar className="h-10 w-10 border border-primary/20 bg-primary/10">
-          <AvatarFallback className="bg-primary/10 text-primary"><UserCircle2 className="h-5 w-5" /></AvatarFallback>
+        <Avatar className="h-8 w-8 border border-primary/20 bg-primary/10 sm:h-10 sm:w-10">
+          <AvatarFallback className="bg-primary/10 text-primary"><UserCircle2 className="h-4 w-4 sm:h-5 sm:w-5" /></AvatarFallback>
         </Avatar>
       )}
     </div>
@@ -2173,7 +2318,7 @@ function MessageAttachmentPreview({ message, isOwn, standalone = false }: { mess
   const resolvedUrl = message.local_attachment_url ?? downloadUrl;
 
   if (attachmentKind === 'image') {
-    const cardClassName = cn(standalone ? '' : 'mt-3', 'w-[min(15rem,58vw)] overflow-hidden rounded-[1.6rem] p-1.5 shadow-sm sm:w-[17rem]', isOwn ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border/70 bg-card/90 text-foreground');
+    const cardClassName = cn(standalone ? '' : 'mt-3', 'w-[min(15rem,72vw)] overflow-hidden rounded-[1.6rem] p-1.5 shadow-sm sm:w-[17rem]', isOwn ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border/70 bg-card/90 text-foreground');
     return (
       <div className={cardClassName}>
         {resolvedUrl ? <img src={resolvedUrl} alt={message.attachment_filename ?? 'Attached image'} className="max-h-[20rem] w-full rounded-[1.2rem] object-cover" />
@@ -2228,6 +2373,12 @@ function renderConversationSnippet(template: string, context: { conversationId: 
   })();
   const dictionary: Record<string, string> = { customer_name: customerLabel, customer_id: context.customerId || '', conversation_id: context.conversationId, latest_customer_message: context.latestCustomerMessage, assisted_draft: context.currentDraft, current_draft: context.currentDraft };
   return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, token: string) => dictionary[token.trim().toLowerCase()] ?? '');
+}
+
+function truncateSidebarTitle(text: string) {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= 3) return text;
+  return words.slice(0, 3).join(' ') + '...';
 }
 
 function getConversationTitle(conversation: Conversation | null | undefined) {

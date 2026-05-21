@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ragApi } from '@/shared/api/rag';
 import { normalizeError } from '@/shared/api/client';
@@ -136,6 +137,7 @@ function SectionHeading({ title, description }: { title: string; description?: s
 
 // ─── Source card ──────────────────────────────────────────────────────────────
 function SourceCard({ title, score, content }: { title: string; score: number; content: string }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const pct = Math.round(score * 100);
   return (
@@ -155,7 +157,7 @@ function SourceCard({ title, score, content }: { title: string; score: number; c
           className="flex items-center gap-1 text-xs text-primary hover:underline"
           onClick={() => setExpanded((v) => !v)}
         >
-          {expanded ? <><ChevronUp className="h-3 w-3" /> Show less</> : <><ChevronDown className="h-3 w-3" /> Show more</>}
+          {expanded ? <><ChevronUp className="h-3 w-3" /> {t('rag.showLess')}</> : <><ChevronDown className="h-3 w-3" /> {t('rag.showMore')}</>}
         </button>
       )}
     </div>
@@ -190,6 +192,7 @@ function FilterPill({
 
 // ─── Create Article Dialog ────────────────────────────────────────────────────
 function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -218,10 +221,10 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
       setContent('');
       setTagsRaw('');
       onCreated();
-      toast({ title: 'Article created', description: 'Knowledge article saved successfully.' });
+      toast({ title: t('rag.articleCreated'), description: t('rag.articleCreatedDesc') });
     },
     onError: (err) =>
-      toast({ variant: 'destructive', title: 'Create article failed', description: normalizeError(err) }),
+      toast({ variant: 'destructive', title: t('rag.createFailed'), description: normalizeError(err) }),
   });
 
   const canCreate = title.trim().length >= 3 && content.trim().length >= 10;
@@ -232,27 +235,27 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="h-4 w-4 mr-1.5" />
-          New article
+          {t('rag.newArticle')}
         </Button>
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create article</DialogTitle>
-          <DialogDescription>Add a new knowledge article to the base.</DialogDescription>
+          <DialogTitle>{t('rag.createArticleTitle')}</DialogTitle>
+          <DialogDescription>{t('rag.createArticleDesc')}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="modal-title" className="text-xs font-medium text-muted-foreground">
-              Title <span className="text-destructive">*</span>
+              {t('rag.title')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="modal-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. How to reset your password"
+              placeholder={t('rag.titlePlaceholder')}
               autoFocus
             />
           </div>
@@ -260,14 +263,14 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
           {/* Summary */}
           <div className="space-y-1.5">
             <Label htmlFor="modal-summary" className="text-xs font-medium text-muted-foreground">
-              Summary{' '}
-              <span className="text-muted-foreground/50 font-normal">(optional)</span>
+              {t('rag.summary')}{' '}
+              <span className="text-muted-foreground/50 font-normal">({t('rag.optional')})</span>
             </Label>
             <Input
               id="modal-summary"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              placeholder="One-line description shown in search results"
+              placeholder={t('rag.summaryPlaceholder')}
             />
           </div>
 
@@ -275,7 +278,7 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="modal-content" className="text-xs font-medium text-muted-foreground">
-                Content <span className="text-destructive">*</span>
+                {t('rag.content')} <span className="text-destructive">*</span>
               </Label>
               <span className="text-xs text-muted-foreground tabular-nums">{content.length} chars</span>
             </div>
@@ -285,14 +288,14 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
               onChange={(e) => setContent(e.target.value)}
               rows={7}
               className="resize-none"
-              placeholder="Full knowledge article content…"
+              placeholder={t('rag.contentPlaceholder')}
             />
           </div>
 
           {/* Category + Language */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Category</Label>
+              <Label className="text-xs font-medium text-muted-foreground">{t('rag.category')}</Label>
               <Select value={category} onValueChange={(v) => setCategory(v as RagArticleCategory)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -305,21 +308,21 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Language</Label>
-              <Input value={lang} onChange={(e) => setLang(e.target.value)} placeholder="en" />
+              <Label className="text-xs font-medium text-muted-foreground">{t('rag.language')}</Label>
+              <Input value={lang} onChange={(e) => setLang(e.target.value)} placeholder={t('rag.langPlaceholder')} />
             </div>
           </div>
 
           {/* Tags */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">
-              Tags{' '}
-              <span className="text-muted-foreground/50 font-normal">(comma-separated)</span>
+              {t('rag.tags')}{' '}
+              <span className="text-muted-foreground/50 font-normal">({t('rag.commaSeparated')})</span>
             </Label>
             <Input
               value={tagsRaw}
               onChange={(e) => setTagsRaw(e.target.value)}
-              placeholder="billing, invoice, refund"
+              placeholder={t('rag.tagsExample')}
             />
             {tagPreviews.length > 0 && (
               <div className="flex flex-wrap gap-1 pt-0.5">
@@ -337,8 +340,8 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
 
           {/* Auto-index toggle */}
           <ToggleRow
-            label="Auto-index on create"
-            description="Chunk and embed this article immediately after saving."
+            label={t('rag.autoIndex')}
+            description={t('rag.autoIndexDesc')}
             checked={autoIndex}
             onCheckedChange={setAutoIndex}
           />
@@ -346,11 +349,11 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
 
         <DialogFooter className="gap-2 sm:gap-0 pt-2">
           <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
-            Cancel
+            {t('rag.cancel')}
           </Button>
           <Button onClick={() => mutate()} disabled={!canCreate || isPending}>
             {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-            Create article
+            {t('rag.createArticle')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -360,6 +363,7 @@ function CreateArticleDialog({ onCreated }: { onCreated: () => void }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export function RagPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -427,36 +431,36 @@ export function RagPage() {
     mutationFn: (id: string) => ragApi.indexArticle(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['rag-articles'] });
-      toast({ title: 'Article indexed' });
+      toast({ title: t('rag.articleIndexed') });
     },
-    onError: (err) => toast({ variant: 'destructive', title: 'Indexing failed', description: normalizeError(err) }),
+    onError: (err) => toast({ variant: 'destructive', title: t('rag.indexFailed'), description: normalizeError(err) }),
   });
 
   const publishArticleMut = useMutation({
     mutationFn: (id: string) => ragApi.publishArticle(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['rag-articles'] });
-      toast({ title: 'Article published' });
+      toast({ title: t('rag.articlePublished') });
     },
-    onError: (err) => toast({ variant: 'destructive', title: 'Publish failed', description: normalizeError(err) }),
+    onError: (err) => toast({ variant: 'destructive', title: t('rag.publishFailed'), description: normalizeError(err) }),
   });
 
   const archiveArticleMut = useMutation({
     mutationFn: (id: string) => ragApi.archiveArticle(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['rag-articles'] });
-      toast({ title: 'Article archived' });
+      toast({ title: t('rag.articleArchived') });
     },
-    onError: (err) => toast({ variant: 'destructive', title: 'Archive failed', description: normalizeError(err) }),
+    onError: (err) => toast({ variant: 'destructive', title: t('rag.archiveFailed'), description: normalizeError(err) }),
   });
 
   const deleteArticleMut = useMutation({
     mutationFn: (id: string) => ragApi.deleteArticle(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['rag-articles'] });
-      toast({ title: 'Article deleted' });
+      toast({ title: t('rag.articleDeleted') });
     },
-    onError: (err) => toast({ variant: 'destructive', title: 'Delete failed', description: normalizeError(err) }),
+    onError: (err) => toast({ variant: 'destructive', title: t('rag.deleteFailed'), description: normalizeError(err) }),
   });
 
   const uploadPdfMut = useMutation({
@@ -464,9 +468,9 @@ export function RagPage() {
     onSuccess: async (uploadResult) => {
       setPdfFile(null);
       await queryClient.invalidateQueries({ queryKey: ['rag-documents'] });
-      toast({ title: 'PDF uploaded', description: uploadResult.message });
+      toast({ title: t('rag.pdfUploaded'), description: uploadResult.message });
     },
-    onError: (err) => toast({ variant: 'destructive', title: 'Upload failed', description: normalizeError(err) }),
+    onError: (err) => toast({ variant: 'destructive', title: t('rag.uploadFailed'), description: normalizeError(err) }),
   });
 
   const ingestPdfMut = useMutation({
@@ -481,9 +485,9 @@ export function RagPage() {
       }),
     onSuccess: async (r) => {
       await queryClient.invalidateQueries({ queryKey: ['rag-articles'] });
-      toast({ title: 'PDF ingested', description: `Created article: ${r.title}` });
+      toast({ title: t('rag.pdfIngested'), description: `Created article: ${r.title}` });
     },
-    onError: (err) => toast({ variant: 'destructive', title: 'Ingest failed', description: normalizeError(err) }),
+    onError: (err) => toast({ variant: 'destructive', title: t('rag.ingestFailed'), description: normalizeError(err) }),
   });
 
   const ingestAllMut = useMutation({
@@ -499,11 +503,11 @@ export function RagPage() {
     onSuccess: async (r) => {
       await queryClient.invalidateQueries({ queryKey: ['rag-articles'] });
       toast({
-        title: 'Bulk ingest completed',
-        description: `Ingested ${r.ingested}, skipped ${r.skipped}, failed ${r.failed}.`,
+        title: t('rag.bulkComplete'),
+        description: t('rag.bulkDesc', { ingested: r.ingested, skipped: r.skipped, failed: r.failed }),
       });
     },
-    onError: (err) => toast({ variant: 'destructive', title: 'Bulk ingest failed', description: normalizeError(err) }),
+    onError: (err) => toast({ variant: 'destructive', title: t('rag.bulkFailed'), description: normalizeError(err) }),
   });
 
   const documents = docsQ.data?.files ?? [];
@@ -537,9 +541,9 @@ export function RagPage() {
         <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto">
           <Layers className="h-5 w-5 text-muted-foreground" />
         </div>
-        <h1 className="text-lg font-semibold">RAG Workspace</h1>
+        <h1 className="text-lg font-semibold">{t('rag.title')}</h1>
         <p className="text-sm text-muted-foreground">
-          RAG testing and knowledge management are available to agent and admin accounts only.
+          {t('rag.accessRestricted')}
         </p>
       </div>
     );
@@ -550,9 +554,9 @@ export function RagPage() {
       {/* ── Page header ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">RAG Workspace</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('rag.title')}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Test responses, manage knowledge articles, and control PDF ingestion.
+            {t('rag.subtitle')}
           </p>
         </div>
         <Button
@@ -566,7 +570,7 @@ export function RagPage() {
           disabled={isRefreshing}
         >
           <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Refresh
+          {t('rag.refresh')}
         </Button>
       </div>
 
@@ -598,10 +602,10 @@ export function RagPage() {
       {/* ── Summary stats ── */}
       {articlesQ.data && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Total articles" value={articles.length} icon={BookOpen} />
-          <StatCard label="Published" value={publishedCount} icon={Activity} />
-          <StatCard label="Indexed" value={indexedCount} icon={Zap} />
-          <StatCard label="PDF documents" value={docsQ.data?.total_files ?? 0} icon={FileText} />
+          <StatCard label={t('rag.totalArticles')} value={articles.length} icon={BookOpen} />
+          <StatCard label={t('rag.published')} value={publishedCount} icon={Activity} />
+          <StatCard label={t('rag.indexed')} value={indexedCount} icon={Zap} />
+          <StatCard label={t('rag.pdfDocuments')} value={docsQ.data?.total_files ?? 0} icon={FileText} />
         </div>
       )}
 
@@ -609,13 +613,13 @@ export function RagPage() {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="h-9">
           <TabsTrigger value="tester" className="text-xs gap-1.5">
-            <Search className="h-3.5 w-3.5" />Testing
+            <Search className="h-3.5 w-3.5" />{t('rag.testingTab')}
           </TabsTrigger>
           <TabsTrigger value="articles" className="text-xs gap-1.5">
-            <BookOpen className="h-3.5 w-3.5" />Articles
+            <BookOpen className="h-3.5 w-3.5" />{t('rag.articlesTab')}
           </TabsTrigger>
           <TabsTrigger value="pdfs" className="text-xs gap-1.5">
-            <FileText className="h-3.5 w-3.5" />PDFs
+            <FileText className="h-3.5 w-3.5" />{t('rag.pdfsTab')}
           </TabsTrigger>
         </TabsList>
 
@@ -623,14 +627,14 @@ export function RagPage() {
         <TabsContent value="tester" className="space-y-4 mt-4">
           <div className="rounded-xl border bg-card p-5 space-y-4">
             <SectionHeading
-              title="Query the knowledge base"
-              description="Simulate how the AI retrieves and responds to a user question."
+              title={t('rag.queryKnowledge')}
+              description={t('rag.queryDesc')}
             />
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Query</Label>
+              <Label className="text-xs font-medium text-muted-foreground">{t('rag.query')}</Label>
               <Textarea
-                placeholder="Ask a question about your knowledge base..."
+                placeholder={t('rag.queryPlaceholder')}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 rows={3}
@@ -645,35 +649,35 @@ export function RagPage() {
 
             <div className="grid gap-3 sm:grid-cols-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">Channel</Label>
-                <Input placeholder="e.g. chat" value={channel} onChange={(e) => setChannel(e.target.value)} />
+                <Label className="text-xs font-medium text-muted-foreground">{t('rag.channel')}</Label>
+                <Input placeholder={t('rag.channelPlaceholder')} value={channel} onChange={(e) => setChannel(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">Tone</Label>
+                <Label className="text-xs font-medium text-muted-foreground">{t('rag.tone')}</Label>
                 <Select value={tone} onValueChange={setTone}>
-                  <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('rag.any')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="professional">Professional</SelectItem>
-                    <SelectItem value="friendly">Friendly</SelectItem>
-                    <SelectItem value="concise">Concise</SelectItem>
+                    <SelectItem value="professional">{t('rag.professional')}</SelectItem>
+                    <SelectItem value="friendly">{t('rag.friendly')}</SelectItem>
+                    <SelectItem value="concise">{t('rag.concise')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">Top K results</Label>
+                <Label className="text-xs font-medium text-muted-foreground">{t('rag.topK')}</Label>
                 <Input type="number" value={topK} onChange={(e) => setTopK(e.target.value)} min={1} max={20} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">Language</Label>
-                <Input placeholder="en" value={language} onChange={(e) => setLanguage(e.target.value)} />
+                <Label className="text-xs font-medium text-muted-foreground">{t('rag.language')}</Label>
+                <Input placeholder={t('rag.langPlaceholder')} value={language} onChange={(e) => setLanguage(e.target.value)} />
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-1">
-              <p className="text-xs text-muted-foreground">Tip: ⌘+Enter to submit</p>
+              <p className="text-xs text-muted-foreground">{t('rag.tip')}</p>
               <Button disabled={!query.trim() || queryMut.isPending} onClick={() => queryMut.mutate()}>
                 {queryMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                Generate
+                {t('rag.generate')}
               </Button>
             </div>
           </div>
@@ -685,7 +689,7 @@ export function RagPage() {
                   <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
                     <Zap className="h-3 w-3 text-primary" />
                   </div>
-                  <h3 className="text-sm font-semibold">Response</h3>
+                  <h3 className="text-sm font-semibold">{t('rag.response')}</h3>
                 </div>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{result.answer}</p>
               </div>
@@ -696,9 +700,9 @@ export function RagPage() {
                       <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
                         <Layers className="h-3 w-3 text-primary" />
                       </div>
-                      <h3 className="text-sm font-semibold">Sources</h3>
+                      <h3 className="text-sm font-semibold">{t('rag.sources')}</h3>
                     </div>
-                    <Badge variant="secondary">{result.sources.length} matched</Badge>
+                    <Badge variant="secondary">{result.sources.length} {t('rag.matched')}</Badge>
                   </div>
                   <div className="space-y-2">
                     {result.sources.map((source, i) => (
@@ -717,9 +721,9 @@ export function RagPage() {
             {/* Header row: title + New article button */}
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
-                <h2 className="text-sm font-semibold">Article library</h2>
+                <h2 className="text-sm font-semibold">{t('rag.articleLibrary')}</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {articlesQ.isLoading ? 'Loading…' : (
+                  {articlesQ.isLoading ? t('rag.loading') : (
                     <>
                       {articles.length} article{articles.length !== 1 ? 's' : ''}
                       {activeFilterCount > 0
@@ -742,7 +746,7 @@ export function RagPage() {
                   className="pl-8"
                   value={articleSearch}
                   onChange={(e) => setArticleSearch(e.target.value)}
-                  placeholder="Search by title…"
+                  placeholder={t('rag.searchPlaceholder')}
                 />
               </div>
               <Button
@@ -752,7 +756,7 @@ export function RagPage() {
                 onClick={() => setShowFilterPanel((v) => !v)}
               >
                 <Filter className="h-3.5 w-3.5" />
-                Filters
+                {t('rag.filters')}
                 {activeFilterCount > 0 && (
                   <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                     {activeFilterCount}
@@ -762,7 +766,7 @@ export function RagPage() {
               {activeFilterCount > 0 && (
                 <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground shrink-0 px-2" onClick={clearFilters}>
                   <X className="h-3.5 w-3.5" />
-                  Clear
+                  {t('rag.clear')}
                 </Button>
               )}
             </div>
@@ -772,12 +776,12 @@ export function RagPage() {
               <div className="rounded-lg border bg-muted/20 px-4 py-3.5 mb-4 space-y-4">
                 {/* Status */}
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Status</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t('rag.status')}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {ARTICLE_STATUS_FILTERS.map((s) => (
                       <FilterPill
                         key={s}
-                        label={s === 'all' ? 'All' : titleCaseEnum(s)}
+                        label={s === 'all' ? t('rag.all') : titleCaseEnum(s)}
                         active={articleStatus === s}
                         activeClass={STATUS_PILL_ACTIVE[s]}
                         onClick={() => setArticleStatus(s)}
@@ -788,10 +792,10 @@ export function RagPage() {
 
                 {/* Category */}
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Category</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t('rag.category')}</p>
                   <div className="flex flex-wrap gap-1.5">
                     <FilterPill
-                      label="All"
+                      label={t('rag.all')}
                       active={articleCategory === 'all'}
                       activeClass="bg-foreground text-background"
                       onClick={() => setArticleCategory('all')}
@@ -810,12 +814,12 @@ export function RagPage() {
 
                 {/* Language */}
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Language</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t('rag.language')}</p>
                   <Input
                     className="max-w-[160px] h-8 text-xs"
                     value={articleLanguage}
                     onChange={(e) => setArticleLanguage(e.target.value)}
-                    placeholder="e.g. en, fr, ar"
+                    placeholder={t('rag.langFilterPlaceholder')}
                   />
                 </div>
               </div>
@@ -826,7 +830,7 @@ export function RagPage() {
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {articleStatus !== 'all' && (
                   <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-0.5 text-xs">
-                    Status: {titleCaseEnum(articleStatus)}
+                    {t('rag.status')}: {titleCaseEnum(articleStatus)}
                     <button onClick={() => setArticleStatus('all')} className="ml-0.5 text-muted-foreground hover:text-foreground">
                       <X className="h-3 w-3" />
                     </button>
@@ -834,7 +838,7 @@ export function RagPage() {
                 )}
                 {articleCategory !== 'all' && (
                   <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-0.5 text-xs">
-                    Category: {titleCaseEnum(articleCategory)}
+                    {t('rag.category')}: {titleCaseEnum(articleCategory)}
                     <button onClick={() => setArticleCategory('all')} className="ml-0.5 text-muted-foreground hover:text-foreground">
                       <X className="h-3 w-3" />
                     </button>
@@ -842,7 +846,7 @@ export function RagPage() {
                 )}
                 {articleLanguage.trim() && (
                   <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-0.5 text-xs">
-                    Language: {articleLanguage.trim()}
+                    {t('rag.language')}: {articleLanguage.trim()}
                     <button onClick={() => setArticleLanguage('')} className="ml-0.5 text-muted-foreground hover:text-foreground">
                       <X className="h-3 w-3" />
                     </button>
@@ -854,17 +858,17 @@ export function RagPage() {
             {/* Article list */}
             {articlesQ.isLoading ? (
               <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading articles…
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('rag.loadingArticles')}
               </div>
             ) : articlesQ.error ? (
               <ErrorState message={normalizeError(articlesQ.error)} onRetry={() => { void articlesQ.refetch(); }} />
             ) : articles.length === 0 ? (
               <EmptyState
-                title="No articles found"
+                title={t('rag.noArticles')}
                 description={
                   activeFilterCount > 0 || articleSearch
-                    ? 'Try adjusting your filters or search query.'
-                    : 'Create your first article using the "New article" button above.'
+                    ? t('rag.noArticlesFilter')
+                    : t('rag.noArticlesCreate')
                 }
               />
             ) : (
@@ -894,7 +898,7 @@ export function RagPage() {
                           className={`text-xs ${article.is_indexed ? '' : 'text-muted-foreground'}`}
                         >
                           <Zap className={`h-2.5 w-2.5 mr-1 ${article.is_indexed ? 'text-primary' : ''}`} />
-                          {article.is_indexed ? `${article.chunk_count} chunks` : 'Not indexed'}
+                          {article.is_indexed ? `${article.chunk_count} chunks` : t('rag.notIndexed')}
                         </Badge>
                       </div>
                     </div>
@@ -921,7 +925,7 @@ export function RagPage() {
                         onClick={() => indexArticleMut.mutate(article.id)}
                       >
                         {indexArticleMut.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
-                        Re-index
+                        {t('rag.reIndex')}
                       </Button>
 
                       {isAdmin && (
@@ -939,7 +943,7 @@ export function RagPage() {
                               ) : (
                                 <CheckCircle2 className="h-3 w-3 mr-1" />
                               )}
-                              Publish
+                              {t('rag.publish')}
                             </Button>
                           ) : (
                             <Button
@@ -954,7 +958,7 @@ export function RagPage() {
                               ) : (
                                 <Archive className="h-3 w-3 mr-1" />
                               )}
-                              Archive
+                              {t('rag.archive')}
                             </Button>
                           )}
                           <Button
@@ -963,7 +967,7 @@ export function RagPage() {
                             className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                             disabled={hasAnyArticleActionPending}
                             onClick={() => {
-                              if (!window.confirm(`Delete "${article.title}"?`)) return;
+                              if (!window.confirm(t('rag.deleteConfirm', { title: article.title }))) return;
                               deleteArticleMut.mutate(article.id);
                             }}
                           >
@@ -972,7 +976,7 @@ export function RagPage() {
                             ) : (
                               <Trash2 className="h-3 w-3 mr-1" />
                             )}
-                            Delete
+                            {t('rag.delete')}
                           </Button>
                         </>
                       )}

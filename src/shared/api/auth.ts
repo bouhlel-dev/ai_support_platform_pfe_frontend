@@ -1,5 +1,5 @@
 import { apiClient, setTokens, clearToken } from './client';
-import type { LoginRequest, RegisterRequest, AuthResponse, User } from '@/shared/types';
+import type { LoginRequest, RegisterRequest, AuthResponse, User, LoginResponse, VerifyOtpRequest, SetupTwoFactorResponse, VerifyTwoFactorSetupRequest } from '@/shared/types';
 
 function normalizeUser(u: any): User {
   const roleRaw = String(u?.role ?? "").toUpperCase();
@@ -18,16 +18,43 @@ function normalizeUser(u: any): User {
     timezone: u?.timezone ? String(u.timezone) : undefined,
     locale: u?.locale ? String(u.locale) : undefined,
     must_change_password: Boolean(u?.must_change_password ?? false),
-    profile_completed: Boolean(u?.profile_completed ?? false),
-    profile_completion_required: Boolean(u?.profile_completion_required ?? false),
+    two_factor_enabled: Boolean(u?.two_factor_enabled ?? false),
   };
 }
 
 export const authApi = {
-  login: async (data: LoginRequest) => {
-    const res = await apiClient<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify(data) });
-    setTokens(res.access_token, res.refresh_token);
-    return res;
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await apiClient<any>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response as LoginResponse;
+  },
+
+  verifyOtp: async (data: VerifyOtpRequest): Promise<AuthResponse> => {
+    const response = await apiClient<any>('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response as AuthResponse;
+  },
+
+  setupTwoFactor: async (): Promise<SetupTwoFactorResponse> => {
+    return apiClient<any>('/auth/2fa/setup', { method: 'POST' });
+  },
+
+  verifyTwoFactorSetup: async (data: VerifyTwoFactorSetupRequest): Promise<{ message: string }> => {
+    return apiClient<any>('/auth/2fa/verify-setup', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  disableTwoFactor: async (password: string): Promise<{ message: string }> => {
+    return apiClient<any>('/auth/2fa/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
   },
   register: async (data: RegisterRequest) =>
     apiClient<any>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),

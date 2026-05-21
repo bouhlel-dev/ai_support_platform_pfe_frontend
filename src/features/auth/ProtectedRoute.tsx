@@ -10,7 +10,7 @@ export function ProtectedRoute({ children, roles }: { children: React.ReactNode;
   if (!user) return <Navigate to="/landing" state={{ from: location }} replace />;
   if (
     location.pathname !== '/profile' &&
-    (user.must_change_password || (user.profile_completion_required && !user.profile_completed))
+    user.must_change_password
   ) {
     return <Navigate to="/profile" replace />;
   }

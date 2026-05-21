@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
   LiveKitRoom,
@@ -14,13 +15,14 @@ import { AlertCircle, Loader2, Mic } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 function AgentVisualizer() {
+  const { t } = useTranslation();
   const { state, audioTrack } = useVoiceAssistant();
   
-  let label = 'Agent is disconnected...';
-  if (state === 'initializing') label = 'Agent is initializing...';
-  if (state === 'listening') label = 'Agent is listening...';
-  if (state === 'thinking') label = 'Agent is thinking...';
-  if (state === 'speaking') label = 'Agent is speaking...';
+  let label = t('voiceTest.disconnected');
+  if (state === 'initializing') label = t('voiceTest.initializing');
+  if (state === 'listening') label = t('voiceTest.listening');
+  if (state === 'thinking') label = t('voiceTest.thinking');
+  if (state === 'speaking') label = t('voiceTest.speaking');
 
   return (
     <div className="flex flex-col items-center justify-center p-8 bg-zinc-950 rounded-2xl border border-zinc-800 h-64 shadow-inner relative overflow-hidden">
@@ -39,6 +41,7 @@ function AgentVisualizer() {
 }
 
 export function VoiceTestPage() {
+  const { t } = useTranslation();
   const [active, setActive] = useState(false);
 
   const tokenQuery = useQuery({
@@ -60,9 +63,9 @@ export function VoiceTestPage() {
     <div className="p-6 max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Test Voice Agent</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t('voiceTest.title')}</h1>
           <p className="text-muted-foreground mt-1">
-            Connect your microphone to test the voice pipeline and interact with the AI assistant in real-time.
+            {t('voiceTest.subtitle')}
           </p>
         </div>
       </div>
@@ -72,29 +75,29 @@ export function VoiceTestPage() {
           <div className="mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4">
             <Mic className="h-8 w-8 text-primary" />
           </div>
-          <h2 className="text-xl font-semibold">Ready to Test</h2>
+          <h2 className="text-xl font-semibold">{t('voiceTest.readyToTest')}</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Make sure your microphone is enabled. Once you connect, you will instantly join a local LiveKit room and your voice agent will be triggered.
+            {t('voiceTest.readyDesc')}
           </p>
           <Button size="lg" onClick={handleConnect} className="mt-4 shadow-md hover:shadow-lg transition-shadow">
-            Connect to Room
+            {t('voiceTest.connectToRoom')}
           </Button>
         </div>
       ) : tokenQuery.isLoading ? (
         <div className="bg-card rounded-xl border p-12 text-center space-y-4 shadow-sm flex flex-col items-center">
           <Loader2 className="h-10 w-10 text-primary animate-spin" />
-          <h2 className="text-lg font-medium animate-pulse">Generating Secure Access Token...</h2>
-          <p className="text-sm text-muted-foreground">Contacting the local Support Ops API</p>
+          <h2 className="text-lg font-medium animate-pulse">{t('voiceTest.generatingToken')}</h2>
+          <p className="text-sm text-muted-foreground">{t('voiceTest.contactingApi')}</p>
         </div>
       ) : tokenQuery.isError ? (
         <Alert variant="destructive" className="max-w-2xl mx-auto shadow-sm">
           <AlertCircle className="h-5 w-5" />
-          <AlertTitle>Connection Failed</AlertTitle>
+          <AlertTitle>{t('voiceTest.connectionFailed')}</AlertTitle>
           <AlertDescription className="mt-2 text-sm leading-relaxed">
-            Could not fetch the LiveKit Token from the backend. Please verify your LiveKit API Key and Secret are properly configured on the Voice Agents page.
+            {t('voiceTest.connectionFailedDesc')}
             <div className="mt-4">
               <Button variant="outline" size="sm" onClick={handleDisconnect} className="bg-white/10 hover:bg-white/20 text-white border-white/20">
-                Cancel Test
+                {t('voiceTest.cancelTest')}
               </Button>
             </div>
           </AlertDescription>
@@ -124,7 +127,7 @@ export function VoiceTestPage() {
             </div>
           </LiveKitRoom>
           <div className="text-center text-xs text-muted-foreground">
-            <p>Connected to <strong>{tokenQuery.data.url}</strong></p>
+            <p>{t('voiceTest.connected', { url: tokenQuery.data.url })}</p>
           </div>
         </div>
       ) : null}

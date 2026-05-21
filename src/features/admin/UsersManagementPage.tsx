@@ -51,25 +51,9 @@ type DirectoryRole = Extract<ManagedUserRole, 'ADMIN' | 'AGENT' | 'CLIENT'>;
 
 const STATUS_FILTERS: Array<'all' | ManagedUserStatus> = ['all', 'ACTIVE', 'SUSPENDED'];
 
-const DIRECTORY_COPY: Record<DirectoryRole, { title: string; description: string; emptyLabel: string }> = {
-  ADMIN: {
-    title: 'Admins',
-    description: 'Manage administrator access, status, and moderation actions.',
-    emptyLabel: 'No admins found for the selected filters.',
-  },
-  AGENT: {
-    title: 'Agents',
-    description: 'Manage agent access, status, and moderation actions.',
-    emptyLabel: 'No agents found for the selected filters.',
-  },
-  CLIENT: {
-    title: 'Clients',
-    description: 'Review client accounts and quickly suspend or reactivate access.',
-    emptyLabel: 'No clients found for the selected filters.',
-  },
-};
+const ROLE_KEY = { ADMIN: 'admin', AGENT: 'agent', CLIENT: 'client' } as const;
 
-function UserStatusBadge({ status }: { status: ManagedUserStatus }) {
+function UserStatusBadge({ status, t }: { status: ManagedUserStatus; t: (key: string) => string }) {
   return (
     <Badge
       variant="outline"
@@ -80,15 +64,15 @@ function UserStatusBadge({ status }: { status: ManagedUserStatus }) {
           : 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100',
       )}
     >
-      {status === 'ACTIVE' ? 'Active' : 'Suspended'}
+      {status === 'ACTIVE' ? t('usersManagement.active') : t('usersManagement.suspended')}
     </Badge>
   );
 }
 
-function formatRole(role: ManagedUserRole) {
-  if (role === 'ADMIN') return 'Admin';
-  if (role === 'AGENT') return 'Agent';
-  return 'Client';
+function formatRole(role: ManagedUserRole, t: (key: string) => string) {
+  if (role === 'ADMIN') return t('usersManagement.adminRole');
+  if (role === 'AGENT') return t('usersManagement.agentRole');
+  return t('usersManagement.clientRole');
 }
 
 function formatAuditActionLabel(action: string) {
@@ -114,6 +98,11 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ManagedUserStatus>('all');
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createPhone, setCreatePhone] = useState('');
 
   const usersQ = useQuery({
     queryKey: ['admin-users-directory', role, statusFilter],
@@ -143,8 +132,8 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
     onSuccess: (updatedUser) => {
       void queryClient.invalidateQueries({ queryKey: ['admin-users-directory'] });
       toast({
-        title: `${updatedUser.full_name} updated`,
-        description: `Status set to ${updatedUser.status.toLowerCase()}.`,
+        title: t('usersManagement.userUpdated', { name: updatedUser.full_name }),
+        description: t('usersManagement.statusSetTo', { status: updatedUser.status.toLowerCase() }),
       });
     },
     onError: (error) => {
@@ -156,11 +145,38 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
     },
   });
 
+  const createMut = useMutation({
+    mutationFn: () =>
+      usersApi.create({
+        full_name: createName.trim(),
+        email: createEmail.trim(),
+        password: createPassword,
+        role,
+        phone_number: createPhone.trim() || null,
+      }),
+    onSuccess: () => {
+      setCreateOpen(false);
+      setCreateName('');
+      setCreateEmail('');
+      setCreatePassword('');
+      setCreatePhone('');
+      void queryClient.invalidateQueries({ queryKey: ['admin-users-directory'] });
+      toast({ title: t('usersManagement.userCreated') });
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: t('usersManagement.createUserFailed'),
+        description: normalizeError(error),
+      });
+    },
+  });
+
   const deleteMut = useMutation({
     mutationFn: (userId: string) => usersApi.remove(userId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-users-directory'] });
-      toast({ title: 'User deleted' });
+      toast({ title: t('usersManagement.userDeleted') });
     },
     onError: (error) => {
       toast({
@@ -200,7 +216,7 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
   };
 
   const handleDelete = (entry: ManagedUser) => {
-    if (!window.confirm(`Delete ${entry.full_name}? This action cannot be undone.`)) {
+    if (!window.confirm(t('usersManagement.deleteConfirm', { name: entry.full_name }))) {
       return;
     }
     deleteMut.mutate(entry.id);
@@ -226,31 +242,36 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{DIRECTORY_COPY[role].title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{DIRECTORY_COPY[role].description}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t(`usersManagement.${ROLE_KEY[role]}Title`)}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t(`usersManagement.${ROLE_KEY[role]}Desc`)}</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => {
-            void usersQ.refetch();
-          }}
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <UserRound className="mr-1.5 h-4 w-4" />
+            {t('usersManagement.create')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { void usersQ.refetch(); }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {t('usersManagement.refresh')}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('usersManagement.total')}</p>
           <p className="mt-2 text-2xl font-semibold">{totalUsers}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Active</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('usersManagement.active')}</p>
           <p className="mt-2 text-2xl font-semibold text-emerald-600 dark:text-emerald-300">{activeUsers}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Suspended</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('usersManagement.suspended')}</p>
           <p className="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-300">{suspendedUsers}</p>
         </div>
       </div>
@@ -277,7 +298,7 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
                 className="h-8"
                 onClick={() => setStatusFilter(value)}
               >
-                {value === 'all' ? 'All' : value === 'ACTIVE' ? 'Active' : 'Suspended'}
+                {value === 'all' ? t('usersManagement.allStatus') : value === 'ACTIVE' ? t('usersManagement.active') : t('usersManagement.suspended')}
               </Button>
             ))}
           </div>
@@ -296,88 +317,159 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
             {t('usersManagement.loadingUsers')}
           </div>
         ) : users.length === 0 ? (
-          <EmptyState title={t('usersManagement.noUsers')} description={DIRECTORY_COPY[role].emptyLabel} />
+          <EmptyState title={t('usersManagement.noUsers')} description={t(`usersManagement.${ROLE_KEY[role]}Empty`)} />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((entry) => {
-                const isSelf = currentUser?.id === entry.id;
-                return (
-                  <TableRow key={entry.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                          {role === 'ADMIN' ? <ShieldCheck className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{entry.full_name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{entry.email}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{formatRole(entry.role)}</TableCell>
-                    <TableCell>
-                      <UserStatusBadge status={entry.status} />
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setSelectedUser(entry)}
-                        >
-                          Details
-                        </Button>
-
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={isBusy || isSelf}
-                          onClick={() => handleToggleStatus(entry)}
-                        >
-                          {updateStatusMut.isPending ? (
-                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                          )}
-                          {entry.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-                        </Button>
-
-                        {canDelete ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive"
-                            disabled={isBusy || isSelf}
-                            onClick={() => handleDelete(entry)}
-                          >
-                            <Trash2 className="mr-1 h-3.5 w-3.5" />
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
-                    </TableCell>
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('usersManagement.user')}</TableHead>
+                    <TableHead>{t('usersManagement.role')}</TableHead>
+                    <TableHead>{t('usersManagement.status')}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t('usersManagement.created')}</TableHead>
+                    <TableHead className="text-right">{t('usersManagement.actions')}</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {users.map((entry) => {
+                    const isSelf = currentUser?.id === entry.id;
+                    return (
+                      <TableRow key={entry.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground shrink-0">
+                              {role === 'ADMIN' ? <ShieldCheck className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{entry.full_name}</p>
+                              <p className="truncate text-xs text-muted-foreground">{entry.email}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatRole(entry.role, t)}</TableCell>
+                        <TableCell>
+                          <UserStatusBadge status={entry.status} t={t} />
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
+                          {entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setSelectedUser(entry)}
+                            >
+                              {t('usersManagement.details')}
+                            </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={isBusy || isSelf}
+                              onClick={() => handleToggleStatus(entry)}
+                            >
+                              {updateStatusMut.isPending ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              )}
+                              <span className="hidden sm:inline ml-1">{entry.status === 'ACTIVE' ? t('usersManagement.suspend') : t('usersManagement.activate')}</span>
+                            </Button>
+
+                            {canDelete ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                disabled={isBusy || isSelf}
+                                onClick={() => handleDelete(entry)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         )}
       </div>
+
+      <Dialog open={createOpen} onOpenChange={(open) => { if (!open) { setCreateOpen(false); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('usersManagement.createUser')}</DialogTitle>
+            <DialogDescription>
+              {t(`usersManagement.createDesc.${ROLE_KEY[role]}`)}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t('usersManagement.fullName')}</label>
+              <Input
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder={t('usersManagement.fullNamePlaceholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t('usersManagement.emailLabel')}</label>
+              <Input
+                type="email"
+                value={createEmail}
+                onChange={(e) => setCreateEmail(e.target.value)}
+                placeholder="user@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t('usersManagement.password')}</label>
+              <Input
+                type="password"
+                value={createPassword}
+                onChange={(e) => setCreatePassword(e.target.value)}
+                placeholder={t('usersManagement.passwordPlaceholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t('usersManagement.phone')}</label>
+              <Input
+                value={createPhone}
+                onChange={(e) => setCreatePhone(e.target.value)}
+                placeholder="+216 XX XXX XXX"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateOpen(false)}
+              disabled={createMut.isPending}
+            >
+              {t('usersManagement.cancel')}
+            </Button>
+            <Button
+              onClick={() => createMut.mutate()}
+              disabled={!createName.trim() || !createEmail.trim() || !createPassword || createMut.isPending}
+            >
+              {createMut.isPending ? (
+                <><Loader2 className="mr-1 h-4 w-4 animate-spin" />{t('usersManagement.creating')}</>
+              ) : (
+                t('usersManagement.create')
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(selectedUser)}
@@ -402,29 +494,29 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
                   {selectedUser.full_name}
                 </DialogTitle>
                 <DialogDescription>
-                  {selectedUser.email} - {formatRole(selectedUser.role)}
+                  {selectedUser.email} - {formatRole(selectedUser.role, t)}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Current status</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('usersManagement.currentStatus')}</p>
                   <div className="mt-2">
-                    <UserStatusBadge status={selectedUser.status} />
+                    <UserStatusBadge status={selectedUser.status} t={t} />
                   </div>
                 </div>
                 <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Phone</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('usersManagement.phone')}</p>
                   <p className="mt-2 text-sm font-medium">{selectedUser.phone_number || '-'}</p>
                 </div>
                 <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Created</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('usersManagement.created')}</p>
                   <p className="mt-2 text-sm font-medium">
                     {selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleString() : '-'}
                   </p>
                 </div>
                 <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Last updated</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('usersManagement.lastUpdated')}</p>
                   <p className="mt-2 text-sm font-medium">
                     {selectedUser.updated_at ? new Date(selectedUser.updated_at).toLocaleString() : '-'}
                   </p>
@@ -434,13 +526,13 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
               <div className="rounded-lg border p-3">
                 <div className="flex items-center gap-2">
                   <Clock3 className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">Status and activity history</h3>
+                  <h3 className="text-sm font-semibold">{t('usersManagement.statusHistory')}</h3>
                 </div>
 
                 {userActivityQ.isLoading ? (
                   <div className="mt-3 flex items-center text-sm text-muted-foreground">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading history...
+                    {t('usersManagement.loadingHistory')}
                   </div>
                 ) : userActivityQ.error ? (
                   <p className="mt-3 text-sm text-rose-600 dark:text-rose-300">
@@ -448,7 +540,7 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
                   </p>
                 ) : statusHistory.length === 0 ? (
                   <p className="mt-3 text-sm text-muted-foreground">
-                    No status-focused audit entries found for this user yet.
+                    {t('usersManagement.noHistory')}
                   </p>
                 ) : (
                   <div className="mt-3 space-y-2">
@@ -457,7 +549,7 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           {formatAuditActionLabel(entry.action)}
                         </p>
-                        <p className="mt-1 text-sm">{entry.description || 'No description provided.'}</p>
+                        <p className="mt-1 text-sm">{entry.description || t('usersManagement.noDescription')}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {entry.created_at ? new Date(entry.created_at).toLocaleString() : '-'}
                         </p>
@@ -467,14 +559,14 @@ function UserDirectoryPage({ role }: { role: DirectoryRole }) {
                 )}
               </div>
 
-              <DialogFooter className="flex-wrap gap-2 sm:justify-between">
-                <Button type="button" variant="outline" onClick={() => openWorkspace('conversations')}>
+              <DialogFooter className="flex-col sm:flex-row flex-wrap gap-2 sm:justify-between">
+                <Button type="button" variant="outline" onClick={() => openWorkspace('conversations')} className="w-full sm:w-auto">
                   <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
-                  Open Conversations
+                  {t('usersManagement.openConversations')}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => openWorkspace('tickets')}>
+                <Button type="button" variant="outline" onClick={() => openWorkspace('tickets')} className="w-full sm:w-auto">
                   <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
-                  Open Tickets
+                  {t('usersManagement.openTickets')}
                 </Button>
               </DialogFooter>
             </>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import type { ButtonHTMLAttributes, MutableRefObject, ReactNode } from 'react';
 import {
@@ -97,16 +98,10 @@ const SCREEN_RECORDING_MIME_CANDIDATES = [
   'video/webm',
 ] as const;
 
-const SCREEN_SHARE_ERROR_MESSAGES = {
-  NO_TRACK: 'No screen track is available. Please start sharing again.',
-  STREAM_ENDED: 'Screen sharing ended. Click Share screen to resume live analysis.',
-  WAITING: 'Waiting for the screen stream...',
-  NOT_SUPPORTED: 'Screen sharing is not supported in this browser.',
-} as const;
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function ClientCallPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -454,7 +449,7 @@ export function ClientCallPage() {
         options.screenUseFrameFallbackRef.current = true;
         options.setScreenCaptureMode('frame');
         options.setIsAnalyzingScreen(true);
-        options.setScreenAnalysisText(`Uploading frame fallback for chunk #${options.chunkIndex}...`);
+        options.setScreenAnalysisText(t('voiceCall.uploadingFallback', { count: options.chunkIndex }));
 
         const fallbackOptions: Record<string, unknown> = {
           consent: true,
@@ -540,7 +535,7 @@ export function ClientCallPage() {
 
         const videoTracks = stream.getVideoTracks();
         if (videoTracks.length === 0) {
-          setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.NO_TRACK);
+          setScreenShareError(t('voiceCall.noTrack'));
           stopScreenSharingLoop(stream, { reason: 'ended' });
           return;
         }
@@ -549,11 +544,11 @@ export function ClientCallPage() {
         if (!hasLiveTrack) {
           screenNoLiveTrackCyclesRef.current += 1;
           if (screenNoLiveTrackCyclesRef.current >= SCREEN_NO_LIVE_TRACK_MAX_CYCLES) {
-            setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.STREAM_ENDED);
+            setScreenShareError(t('voiceCall.sharingEnded'));
             stopScreenSharingLoop(stream, { reason: 'ended' });
             return;
           }
-          setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.WAITING);
+          setScreenShareError(t('voiceCall.waitingStream'));
           scheduleNext(runIteration);
           return;
         }
@@ -571,7 +566,7 @@ export function ClientCallPage() {
         const chunkIndex = screenChunkIndexRef.current;
         const captureUnit = screenUseFrameFallbackRef.current ? 'frame' : 'chunk';
         setScreenChunkNumber(chunkIndex);
-        setScreenAnalysisText(`Capturing screen ${captureUnit} #${chunkIndex}...`);
+        setScreenAnalysisText(t('voiceCall.capturing', { unit: captureUnit, count: chunkIndex }));
 
         try {
           if (screenUseFrameFallbackRef.current) {
@@ -591,7 +586,7 @@ export function ClientCallPage() {
 
           setIsAnalyzingScreen(true);
           setScreenShareError(null);
-          setScreenAnalysisText(`Uploading chunk #${chunkIndex} for analysis...`);
+          setScreenAnalysisText(t('voiceCall.uploadingChunk', { count: chunkIndex }));
 
           const chunkOptions: Record<string, unknown> = {
             consent: true,
@@ -673,12 +668,12 @@ export function ClientCallPage() {
     }
 
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.NOT_SUPPORTED);
+      setScreenShareError(t('voiceCall.notSupported'));
       return;
     }
 
     if (!SCREEN_CAPTURE_PREFER_FRAME_FALLBACK && typeof MediaRecorder === 'undefined') {
-      setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.NOT_SUPPORTED);
+      setScreenShareError(t('voiceCall.notSupported'));
       return;
     }
 
@@ -700,7 +695,7 @@ export function ClientCallPage() {
         } catch { /* best effort */ }
 
         videoTrack.onended = () => {
-          setScreenShareError(SCREEN_SHARE_ERROR_MESSAGES.STREAM_ENDED);
+          setScreenShareError(t('voiceCall.sharingEnded'));
           stopScreenSharingLoop(stream, { reason: 'ended' });
         };
 
@@ -767,7 +762,7 @@ export function ClientCallPage() {
           helperContent={
             <p className="inline-flex items-center gap-2 text-sm text-primary">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Starting your live support call...
+              {t('voiceCall.startingCall')}
             </p>
           }
           initials={initials}
@@ -777,7 +772,7 @@ export function ClientCallPage() {
           onBack={handleLeave}
           onEndCall={handleLeave}
           onShareScreen={handleShareScreen}
-          orbLabel="Joining"
+          orbLabel={t('voiceCall.joining')}
           orbState="standby"
           screenCaptureMode={screenCaptureMode}
           screenAnalysisEngineLabel={screenAnalysisEngineLabel}
@@ -787,7 +782,7 @@ export function ClientCallPage() {
           lastScreenAnalysisAt={lastScreenAnalysisAt}
           screenPreviewStream={screenPreviewStream}
           screenShareError={screenShareError}
-          statusLabel="Joining..."
+          statusLabel={t('voiceCall.joining2')}
         />
       </div>
     );
@@ -811,7 +806,7 @@ export function ClientCallPage() {
           onBack={handleLeave}
           onEndCall={handleLeave}
           onShareScreen={handleShareScreen}
-          orbLabel="Unavailable"
+          orbLabel={t('voiceCall.callUnavailable')}
           orbState="standby"
           screenCaptureMode={screenCaptureMode}
           screenAnalysisEngineLabel={screenAnalysisEngineLabel}
@@ -821,7 +816,7 @@ export function ClientCallPage() {
           lastScreenAnalysisAt={lastScreenAnalysisAt}
           screenPreviewStream={screenPreviewStream}
           screenShareError={screenShareError}
-          statusLabel="Call unavailable"
+          statusLabel={t('voiceCall.callUnavailable')}
         />
       </div>
     );
@@ -900,6 +895,7 @@ function ClientCallRoomStage({
   screenPreviewStream: MediaStream | null;
   screenShareError: string | null;
 }) {
+  const { t } = useTranslation();
   const room = useRoomContext();
   const connectionState = useConnectionState();
   const { state: assistantState, audioTrack } = useVoiceAssistant();
@@ -926,7 +922,7 @@ function ClientCallRoomStage({
   return (
     <ClientCallShell
       displayName={displayName}
-      helperContent={getCallHelperContent({ assistantState, connectionState, lastMicrophoneError, roomError })}
+      helperContent={getCallHelperContent({ assistantState, connectionState, lastMicrophoneError, roomError, t })}
       initials={initials}
       isAnalyzingScreen={isAnalyzingScreen}
       isScreenSharing={isScreenSharing}
@@ -940,7 +936,7 @@ function ClientCallRoomStage({
       onToggleMute={() => {
         void localParticipant.setMicrophoneEnabled(muted);
       }}
-      orbLabel={getOrbStateLabel({ assistantState, connectionState, state: orbState })}
+      orbLabel={getOrbStateLabel({ assistantState, connectionState, state: orbState, t })}
       orbState={orbState}
       screenCaptureMode={screenCaptureMode}
       screenAnalysisEngineLabel={screenAnalysisEngineLabel}
@@ -950,7 +946,7 @@ function ClientCallRoomStage({
       lastScreenAnalysisAt={lastScreenAnalysisAt}
       screenPreviewStream={screenPreviewStream}
       screenShareError={screenShareError}
-      statusLabel={getStatusLabel({ connectionState, lastMicrophoneError, roomError })}
+      statusLabel={getStatusLabel({ connectionState, lastMicrophoneError, roomError, t })}
     />
   );
 }
@@ -1002,7 +998,8 @@ function ClientCallShell({
   screenShareError?: string | null;
   statusLabel: string;
 }) {
-  const analysisEngineLabel = screenAnalysisEngineLabel || 'Live analysis';
+  const { t } = useTranslation();
+  const analysisEngineLabel = screenAnalysisEngineLabel || t('voiceCall.liveAnalysis');
   const orbScale = 1 + motionLevel * 0.22;
   const orbGlow = 20 + motionLevel * 56;
   const orbInnerGlow = 14 + motionLevel * 34;
@@ -1017,43 +1014,46 @@ function ClientCallShell({
     latestAnalysisEntry?.text ||
     retainedScreenAnalysisText ||
     screenShareError ||
-    (isAnalyzingScreen ? 'Analyzing screen...' : 'Waiting for first readable frame...');
+    (isAnalyzingScreen ? t('voiceCall.analyzingScreen') : t('voiceCall.waitingFirstFrame'));
 
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-col overflow-hidden">
-      <header className="shrink-0 flex items-center justify-between px-6 py-5">
+      {/* ── Header ── */}
+      <header className="shrink-0 flex items-center justify-between px-4 py-3 gap-2">
         <Button
           type="button"
           variant="ghost"
-          className="rounded-full border border-border/70 bg-card/75 px-4 text-foreground shadow-sm backdrop-blur hover:bg-card dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 dark:hover:text-white"
+          className="rounded-full border border-border/70 bg-card/75 px-3 sm:px-4 text-foreground shadow-sm backdrop-blur hover:bg-card dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 dark:hover:text-white shrink-0"
           onClick={onBack}
         >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to chat
+          <ArrowLeft className="mr-1.5 sm:mr-2 h-4 w-4" />
+          <span className="text-sm">{t('voiceCall.backToChat')}</span>
         </Button>
 
-        <div className="text-center">
-          <Badge variant="secondary" className="rounded-full px-3 py-1">
-            Support call
-          </Badge>
-          <h1 className="mt-3 text-xl font-semibold tracking-tight text-foreground dark:text-white">
-            Live support session
+        <div className="text-center min-w-0">
+          <h1 className="text-sm sm:text-base font-semibold tracking-tight text-foreground dark:text-white truncate">
+            {t('voiceCall.title')}
           </h1>
+          <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-xs mt-0.5">
+            {t('voiceCall.supportCall')}
+          </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="rounded-full border border-border/70 bg-card/75 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="rounded-full border border-border/70 bg-card/75 px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm text-muted-foreground shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-slate-200 max-w-[6rem] sm:max-w-none truncate">
             {statusLabel}
           </div>
         </div>
       </header>
 
-      <main className="relative flex min-h-0 flex-1 overflow-hidden px-6 pb-36 pt-6 lg:gap-6">
+      {/* ── Main ── */}
+      <main className="relative flex min-h-0 flex-1 overflow-hidden px-4 sm:px-6 pb-28 sm:pb-36 pt-4 sm:pt-6 lg:gap-6">
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
-          <div className="relative flex h-[16rem] w-[16rem] items-center justify-center sm:h-[19rem] sm:w-[19rem]">
+          {/* Orb */}
+          <div className="relative flex h-[11rem] w-[11rem] items-center justify-center sm:h-[16rem] sm:w-[16rem]">
             <div
               className={cn(
-                'call-liquid-sphere relative flex h-56 w-56 items-center justify-center overflow-hidden border border-primary/18 bg-primary text-primary-foreground transition-all duration-150 dark:border-primary/24 dark:bg-primary sm:h-64 sm:w-64',
+                'call-liquid-sphere relative flex h-36 w-36 items-center justify-center overflow-hidden border border-primary/18 bg-primary text-primary-foreground transition-all duration-150 dark:border-primary/24 dark:bg-primary sm:h-56 sm:w-56',
                 orbActive ? 'call-liquid-sphere-active' : undefined,
               )}
               data-orb-state={orbState}
@@ -1062,20 +1062,21 @@ function ClientCallShell({
                 boxShadow: `0 0 ${orbGlow}px hsl(var(--primary) / 0.24), 0 0 ${orbGlow + 26}px hsl(var(--primary) / 0.16), inset 0 -18px ${orbInnerGlow}px hsl(var(--primary) / 0.24)`,
               }}
             >
-              <div className="relative z-10 flex items-center justify-center px-8">
-                <span className="rounded-full border border-white/18 bg-white/12 px-3 py-1 text-xs uppercase tracking-[0.26em] text-primary-foreground/88">
+              <div className="relative z-10 flex items-center justify-center px-6 sm:px-8">
+                <span className="rounded-full border border-white/18 bg-white/12 px-2.5 py-1 text-[10px] sm:text-xs uppercase tracking-[0.26em] text-primary-foreground/88">
                   {orbLabel}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 max-w-lg space-y-2 sm:mt-8">
-            <p className="text-2xl font-semibold tracking-tight text-foreground dark:text-white">
-              <span>{displayName}</span>, your call is ready
+          {/* Name + subtitle */}
+          <div className="mt-3 sm:mt-6 max-w-lg space-y-1.5 px-4">
+            <p className="text-lg sm:text-2xl font-semibold tracking-tight text-foreground dark:text-white">
+              {t('voiceCall.callReady', { name: displayName })}
             </p>
-            <p className="text-sm leading-7 text-muted-foreground dark:text-slate-300">
-              Keep the conversation focused here while live screen guidance updates alongside the call.
+            <p className="text-sm leading-6 text-muted-foreground dark:text-slate-300">
+              {t('voiceCall.keepFocused')}
             </p>
             {helperContent}
           </div>
@@ -1093,7 +1094,7 @@ function ClientCallShell({
                       : 'border-primary-600 bg-primary-100 text-primary-900 dark:border-primary-700 dark:bg-primary-950 dark:text-primary-100',
                   )}
                 >
-                  <p className="font-medium">{screenShareError ? 'Analysis Issue' : 'Live Analysis'}</p>
+                  <p className="font-medium">{screenShareError ? t('voiceCall.analysisIssue') : t('voiceCall.liveAnalysis')}</p>
                   <p className="mt-1">{liveAnalysisMessage}</p>
                 </div>
               ) : null}
@@ -1110,8 +1111,8 @@ function ClientCallShell({
               {isScreenSharing && lastScreenAnalysisAt && (
                 <p className="text-center text-[10px] text-muted-foreground/70">
                   {lastScreenAnalysisAt
-                    ? `Updated ${formatScreenAnalysisTimestamp(lastScreenAnalysisAt)}`
-                    : 'Awaiting first analysis'}
+                    ? t('voiceCall.updated', { timestamp: formatScreenAnalysisTimestamp(lastScreenAnalysisAt) })
+                    : t('voiceCall.awaitingAnalysis')}
                 </p>
               )}
             </div>
@@ -1119,21 +1120,22 @@ function ClientCallShell({
         ) : null}
       </main>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-8">
-        <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border/70 bg-card px-4 py-3 shadow-[0_24px_80px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-slate-950 dark:shadow-[0_24px_80px_rgba(2,6,23,0.55)]">
+      {/* ── Controls bar ── */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-6 sm:pb-8">
+        <div className="pointer-events-auto flex items-center gap-1 sm:gap-3 rounded-full border border-border/70 bg-card px-2 py-2 sm:px-4 sm:py-3 shadow-[0_24px_80px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-slate-950 dark:shadow-[0_24px_80px_rgba(2,6,23,0.55)]">
           <CallControlButton
-            label={muted ? 'Unmute' : 'Mute'}
+            label={muted ? t('voiceCall.unmute') : t('voiceCall.mute')}
             disabled={!onToggleMute}
             onClick={onToggleMute}
             className={muted ? 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-100' : undefined}
           >
             {muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
           </CallControlButton>
-          <CallControlButton label="Audio status" disabled>
+          <CallControlButton label={t('voiceCall.audioStatus')} disabled>
             <Volume2 className="h-5 w-5" />
           </CallControlButton>
           <CallControlButton
-            label={isScreenSharing ? 'Stop sharing screen' : 'Share screen'}
+            label={isScreenSharing ? t('voiceCall.stopSharing') : t('voiceCall.shareScreen')}
             disabled={!onShareScreen || (isAnalyzingScreen && !isScreenSharing)}
             onClick={onShareScreen}
             className={isScreenSharing ? 'bg-primary/15 text-primary hover:bg-primary/25 dark:text-sky-200' : undefined}
@@ -1141,7 +1143,7 @@ function ClientCallShell({
             <MonitorUp className={cn('h-5 w-5', isScreenSharing && 'animate-pulse')} />
           </CallControlButton>
           <CallControlButton
-            label="End call"
+            label={t('voiceCall.endCall')}
             onClick={onEndCall}
             className="bg-rose-600 text-white hover:bg-rose-500"
           >
@@ -1190,6 +1192,7 @@ function ClientCallScreenAnalysisPanel({
   screenShareError: string | null | undefined;
   showCloseButton?: boolean;
 }) {
+  const { t } = useTranslation();
   const previewRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -1225,10 +1228,10 @@ function ClientCallScreenAnalysisPanel({
   const latestMeta = latestAnalysisEntry
     ? `${capitalizeScreenCaptureMode(latestAnalysisEntry.captureMode)} #${latestAnalysisEntry.frameNumber} - ${formatScreenAnalysisTimestamp(latestAnalysisEntry.recordedAt)}`
     : lastScreenAnalysisAt
-      ? `Updated ${formatScreenAnalysisTimestamp(lastScreenAnalysisAt)}`
+      ? t('voiceCall.updated', { timestamp: formatScreenAnalysisTimestamp(lastScreenAnalysisAt) })
       : isScreenSharing
-        ? 'Waiting for the first readable frame analysis.'
-        : 'Recent frame summaries stay visible here.';
+        ? t('voiceCall.waitingFirstSummary')
+        : t('voiceCall.recentFrames');
   const showPreview = Boolean(screenPreviewStream) || isScreenSharing || isAnalyzingScreen;
   const latestCompletedFrameNumber = latestAnalysisEntry?.frameNumber ?? 0;
   const latestCompletedFrameLabel = latestAnalysisEntry
@@ -1236,11 +1239,11 @@ function ClientCallScreenAnalysisPanel({
     : null;
   const isAwaitingCurrentFrameResult = isAnalyzingScreen && currentFrameNumber > latestCompletedFrameNumber;
   const latestInsightLabel =
-    isAwaitingCurrentFrameResult && latestCompletedFrameLabel ? 'Latest completed insight' : 'Latest insight';
+    isAwaitingCurrentFrameResult && latestCompletedFrameLabel ? t('voiceCall.latestCompleted') : t('voiceCall.latestInsight');
   const pendingInsightLabel = isAwaitingCurrentFrameResult
     ? latestCompletedFrameLabel
-      ? `${currentCaptureLabel} is still processing. ${latestCompletedFrameLabel} is the most recent completed result.`
-      : `${currentCaptureLabel} is still processing. A fresh summary will appear here when Gemini finishes.`
+      ? t('voiceCall.reviewing', { mode: currentCaptureLabel.toLowerCase() }) + ' ' + latestCompletedFrameLabel + ' ' + t('voiceCall.latestCompleted')
+      : t('voiceCall.reviewing', { mode: currentCaptureLabel.toLowerCase() })
     : null;
 
   return (
@@ -1269,11 +1272,11 @@ function ClientCallScreenAnalysisPanel({
             <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-slate-400">
               {isAnalyzingScreen
                 ? latestCompletedFrameLabel && isAwaitingCurrentFrameResult
-                  ? `Reviewing ${currentCaptureLabel.toLowerCase()} now. Last completed result: ${latestCompletedFrameLabel.toLowerCase()}.`
-                  : `Reviewing ${currentCaptureLabel.toLowerCase()} now.`
+                  ? `${t('voiceCall.reviewing', { mode: currentCaptureLabel.toLowerCase() })} ${t('voiceCall.latestCompleted')}: ${latestCompletedFrameLabel.toLowerCase()}.`
+                  : t('voiceCall.reviewing', { mode: currentCaptureLabel.toLowerCase() })
                 : panelLayout === 'sidebar'
-                  ? 'Sidebar with live frame summaries.'
-                  : 'Floating overlay with live frame summaries.'}
+                  ? t('voiceCall.sidebarDesc')
+                  : t('voiceCall.floatingOverlay')}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -1285,7 +1288,7 @@ function ClientCallScreenAnalysisPanel({
                 size="icon"
                 className="h-8 w-8 rounded-full"
                 onClick={onCloseSidebar}
-                aria-label="Close sidebar"
+                aria-label={t('voiceCall.closeSidebar')}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -1315,7 +1318,7 @@ function ClientCallScreenAnalysisPanel({
                     </span>
                     {isScreenSharing ? (
                       <span className="rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] text-muted-foreground dark:border-white/10 dark:bg-slate-950/80 dark:text-slate-300">
-                        Live share
+                        {t('voiceCall.liveShare')}
                       </span>
                     ) : null}
                   </div>
@@ -1324,7 +1327,7 @@ function ClientCallScreenAnalysisPanel({
                     <div className="absolute inset-x-3 bottom-3">
                       <p className="inline-flex max-w-full items-center gap-2 rounded-full border border-border/70 bg-background/90 px-3 py-1.5 text-xs text-foreground shadow-sm dark:border-white/10 dark:bg-slate-950/90 dark:text-slate-100">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Analyzing with {analysisEngineLabel}...
+                        {t('voiceCall.analyzing')}
                       </p>
                     </div>
                   ) : null}
@@ -1357,9 +1360,9 @@ function ClientCallScreenAnalysisPanel({
             <div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-foreground dark:text-white">Frame history</p>
+                  <p className="text-sm font-medium text-foreground dark:text-white">{t('voiceCall.frameHistory')}</p>
                   <p className="text-xs text-muted-foreground dark:text-slate-400">
-                    Readable summaries from this share session.
+                    {t('voiceCall.readableSummaries')}
                   </p>
                 </div>
                 <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground dark:bg-white/5 dark:text-slate-400">
@@ -1389,8 +1392,8 @@ function ClientCallScreenAnalysisPanel({
             ) : (
                 <p className="mt-3 text-sm leading-6 text-muted-foreground dark:text-slate-400">
                 {isScreenSharing
-                  ? 'Waiting for the first frame summary.'
-                  : 'Start sharing your screen to build a readable analysis timeline.'}
+                  ? t('voiceCall.waitingFirstSummary')
+                  : t('voiceCall.startSharing')}
               </p>
             )}
             </div>
@@ -1446,7 +1449,7 @@ function CallControlButton({
       type="button"
       aria-label={label}
       className={cn(
-        'flex h-14 w-14 items-center justify-center rounded-full bg-background text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white/8 dark:text-white dark:hover:bg-white/14',
+        'flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white/8 dark:text-white dark:hover:bg-white/14 sm:h-14 sm:w-14',
         className,
       )}
       {...props}
@@ -1461,11 +1464,13 @@ function getCallHelperContent({
   connectionState,
   lastMicrophoneError,
   roomError,
+  t,
 }: {
   assistantState: AssistantState;
   connectionState: ConnectionState;
   lastMicrophoneError: Error | undefined;
   roomError: string | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   if (roomError) {
     return (
@@ -1479,7 +1484,7 @@ function getCallHelperContent({
   if (lastMicrophoneError) {
     return (
       <p className="text-sm text-amber-600 dark:text-amber-200">
-        Microphone access is blocked. Allow mic permission to join the live support call.
+        {t('voiceCall.micBlocked')}
       </p>
     );
   }
@@ -1488,7 +1493,7 @@ function getCallHelperContent({
     return (
       <p className="inline-flex items-center gap-2 text-sm text-primary">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Connecting to your microphone...
+        {t('voiceCall.connectingMic')}
       </p>
     );
   }
@@ -1500,7 +1505,7 @@ function getCallHelperContent({
     return (
       <p className="inline-flex items-center gap-2 text-sm text-primary">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Reconnecting to your support call...
+        {t('voiceCall.reconnectingSupport')}
       </p>
     );
   }
@@ -1508,7 +1513,7 @@ function getCallHelperContent({
   if (assistantState === 'speaking') {
     return (
       <p className="text-sm text-muted-foreground dark:text-slate-300">
-        Support is responding in real time. Jump back in whenever you are ready.
+        {t('voiceCall.jumpBackIn')}
       </p>
     );
   }
@@ -1516,7 +1521,7 @@ function getCallHelperContent({
   if (assistantState === 'thinking') {
     return (
       <p className="text-sm text-muted-foreground dark:text-slate-300">
-        Support is thinking through your last message.
+        {t('voiceCall.supportThinking')}
       </p>
     );
   }
@@ -1525,14 +1530,14 @@ function getCallHelperContent({
     return (
       <p className="inline-flex items-center gap-2 text-sm text-primary">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Bringing the voice assistant into your room...
+        {t('voiceCall.bringingAssistant')}
       </p>
     );
   }
 
   return (
     <p className="text-sm text-muted-foreground dark:text-slate-300">
-      Speak naturally to continue the conversation with support.
+      {t('voiceCall.speakNaturally')}
     </p>
   );
 }
@@ -1561,25 +1566,27 @@ function getOrbStateLabel({
   assistantState,
   connectionState,
   state,
+  t,
 }: {
   assistantState: AssistantState;
   connectionState: ConnectionState;
   state: OrbVisualState;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   if (state === 'muted') {
-    return 'Muted';
+    return t('voiceCall.muted');
   }
 
   if (state === 'speaking') {
-    return 'Speaking';
+    return t('voiceCall.speaking');
   }
 
   if (state === 'listening') {
-    return 'Listening';
+    return t('voiceCall.listening');
   }
 
   if (state === 'thinking' || assistantState === 'thinking') {
-    return 'Thinking';
+    return t('voiceCall.thinking');
   }
 
   if (
@@ -1587,52 +1594,54 @@ function getOrbStateLabel({
     assistantState === 'connecting' ||
     assistantState === 'initializing'
   ) {
-    return 'Joining';
+    return t('voiceCall.joining');
   }
 
   if (
     connectionState === ConnectionState.Reconnecting ||
     connectionState === ConnectionState.SignalReconnecting
   ) {
-    return 'Rejoining';
+    return t('voiceCall.rejoining');
   }
 
-  return 'Standby';
+  return t('voiceCall.standby');
 }
 
 function getStatusLabel({
   connectionState,
   lastMicrophoneError,
   roomError,
+  t,
 }: {
   connectionState: ConnectionState;
   lastMicrophoneError?: Error;
   roomError?: string | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   if (roomError) {
-    return 'Call issue';
+    return t('voiceCall.callIssue');
   }
 
   if (lastMicrophoneError) {
-    return 'Permission needed';
+    return t('voiceCall.permissionNeeded');
   }
 
   if (connectionState === ConnectionState.Connected) {
-    return 'Mic connected';
+    return t('voiceCall.micConnected');
   }
 
   if (
     connectionState === ConnectionState.Reconnecting ||
     connectionState === ConnectionState.SignalReconnecting
   ) {
-    return 'Reconnecting';
+    return t('voiceCall.reconnecting');
   }
 
   if (connectionState === ConnectionState.Disconnected) {
-    return 'Disconnected';
+    return t('voiceCall.disconnected');
   }
 
-  return 'Joining...';
+  return t('voiceCall.joining2');
 }
 
 function getPreferredScreenRecordingMimeType() {
@@ -1793,8 +1802,6 @@ function captionSuggestsVisibleContent(caption: string | null | undefined) {
   return !lowSignalMarkers.some((marker) => normalized.includes(marker));
 }
 
-// ─── CHANGED: strips noise and surfaces real OCR/caption content ──────────────
-
 const HINT_NOISE_PREFIXES = [
   'frames processed:',
   'avg transition:',
@@ -1817,34 +1824,26 @@ function getPreferredScreenAnalysisHint(hints: string[] | undefined, caption?: s
     return HINT_NOISE_PREFIXES.some((p) => n.startsWith(p));
   };
 
-  // 1. Raw OCR text — strip the "Visible text: " prefix
   const visibleText = hints.find((h) => h.trim().toLowerCase().startsWith('visible text:'));
   if (visibleText) return visibleText.replace(/^visible text:\s*/i, '').trim();
 
-  // 2. UI element labels — strip the "UI cues: " prefix
   const uiCues = hints.find((h) => h.trim().toLowerCase().startsWith('ui cues:'));
   if (uiCues) return uiCues.replace(/^ui cues:\s*/i, '').trim();
 
-  // 3. Any remaining non-noise hint
   const meaningful = hints.find((h) => !isNoise(h));
   if (meaningful) return meaningful.trim();
 
   return '';
 }
 
-// ─── CHANGED: returns null when there's no real content so empty frames
-// don't overwrite good history entries ────────────────────────────────────────
-
 function buildAnalysisText(
   caption: string | undefined,
   ocrText: string | undefined,
   hint: string | undefined,
 ): string | null {
-  // Priority: raw OCR text > UI hint (already stripped of prefix) > caption
   if (ocrText) return ocrText;
   if (hint) return hint;
   if (caption) return caption;
-  // Return null so the caller knows there's nothing worth showing/recording
   return null;
 }
 
@@ -1902,6 +1901,7 @@ function ScreenShareVideoPopup({
   screenChunkNumber: number;
   screenShareError: string | null;
 }) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
 
@@ -1942,7 +1942,7 @@ function ScreenShareVideoPopup({
         muted
         playsInline
         className="h-full w-full object-cover"
-        aria-label="Screen share preview"
+        aria-label={t('voiceCall.previewLabel')}
       />
 
       <div className="absolute inset-0 pointer-events-none">
@@ -1958,7 +1958,7 @@ function ScreenShareVideoPopup({
         {isAnalyzingScreen && (
           <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5 rounded-full border border-white/20 bg-black/60 px-2.5 py-1">
             <Loader2 className="h-3 w-3 animate-spin text-primary" />
-            <span className="text-[10px] font-medium text-white">Analyzing...</span>
+            <span className="text-[10px] font-medium text-white">{t('voiceCall.analyzing')}</span>
           </div>
         )}
       </div>

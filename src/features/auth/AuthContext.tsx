@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '@/shared/types';
 import { authApi } from '@/shared/api/auth';
-import { getToken, clearToken, setToken, onAuthChanged, onSessionExpired } from '@/shared/api/client';
+import { getToken, clearToken, setToken, setTokens, onAuthChanged, onSessionExpired } from '@/shared/api/client';
 import { getClientConfigBoolean } from '@/shared/config/clientConfig';
 import { useToast } from '@/hooks/use-toast';
 
@@ -13,6 +14,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  completeTwoFactorLogin: (tempToken: string, otpCode: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const enableDemoAuth = getClientConfigBoolean('VITE_ENABLE_DEMO_AUTH', false);
   const { toast } = useToast();
   const sessionExpiredRef = useRef(false);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const prevUserIdRef = useRef<string | null>(null);
 
@@ -109,17 +112,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void queryClient.invalidateQueries();
       return;
     }
-    await authApi.login({ email, password });
+    const result = await authApi.login({ email, password });
+    if (result.two_factor_required) {
+      navigate(`/verify-otp?token=${result.temp_token}`);
+      return;
+    }
+    setTokens(result.access_token, result.refresh_token);
     await refreshUser();
     void queryClient.invalidateQueries();
-  }, [enableDemoAuth, refreshUser, queryClient]);
+    navigate('/');
+  }, [enableDemoAuth, refreshUser, queryClient, navigate]);
 
   const register = useCallback(async (email: string, password: string, name: string) => {
     await authApi.register({ email, password, full_name: name });
-    await authApi.login({ email, password });
+    const result = await authApi.login({ email, password });
+    if (result.two_factor_required) {
+      navigate(`/verify-otp?token=${result.temp_token}`);
+      return;
+    }
+    setTokens(result.access_token, result.refresh_token);
     await refreshUser();
     void queryClient.invalidateQueries();
-  }, [refreshUser, queryClient]);
+    navigate('/');
+  }, [refreshUser, queryClient, navigate]);
 
   const logout = useCallback(async () => {
     await authApi.logout();
@@ -127,7 +142,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void queryClient.invalidateQueries();
   }, [queryClient]);
 
-  return <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>{children}</AuthContext.Provider>;
+  const completeTwoFactorLogin = useCallback(async (tempToken: string, otpCode: string) => {
+    const result = await authApi.verifyOtp({ temp_token: tempToken, otp_code: otpCode });
+    setTokens(result.access_token, result.refresh_token);
+    await refreshUser();
+    void queryClient.invalidateQueries();
+  }, [refreshUser, queryClient]);
+
+  return <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, completeTwoFactorLogin }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
