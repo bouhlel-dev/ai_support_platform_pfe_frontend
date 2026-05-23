@@ -24,6 +24,18 @@ const operatorNavItems = [
   { titleKey: 'common.notifications', url: '/notifications', icon: Bell },
 ];
 
+const agentNavItems = [
+  { titleKey: 'common.dashboard', url: '/', icon: LayoutDashboard },
+  { titleKey: 'common.tickets', url: '/tickets', icon: Ticket },
+  { titleKey: 'common.conversations', url: '/conversations', icon: MessageSquare },
+  { titleKey: 'common.emailChannel', url: '/email', icon: Mail },
+  { titleKey: 'common.whatsapp', url: '/whatsapp', icon: MessageCircle },
+  { titleKey: 'common.escalations', url: '/escalations', icon: AlertTriangle },
+  { titleKey: 'common.voiceCallTranscripts', url: '/voice-calls', icon: PhoneCall },
+  { titleKey: 'common.decisions', url: '/decisions', icon: Brain },
+  { titleKey: 'common.notifications', url: '/notifications', icon: Bell },
+];
+
 const clientNavItems = [
   { titleKey: 'common.dashboard', url: '/', icon: LayoutDashboard },
   { titleKey: 'common.conversations', url: '/conversations', icon: MessageSquare },
@@ -60,7 +72,8 @@ export function AppSidebar() {
     enabled: !!user,
   });
   const isActive = (path: string) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
-  const navItems = user?.role === 'client' ? clientNavItems : operatorNavItems;
+  const navItems =
+    user?.role === 'client' ? clientNavItems : user?.role === 'agent' ? agentNavItems : operatorNavItems;
   const displayUser = userQ.data ?? user;
   const translatedNavItems = navItems.map((item) => ({ ...item, title: t(item.titleKey) }));
   const translatedAdminItems = adminItems.map((item) => ({ ...item, title: t(item.titleKey) }));
